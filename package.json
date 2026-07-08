@@ -1,0 +1,30 @@
+{
+  "name": "opencode-zellij-status",
+  "version": "0.1.0",
+  "description": "Show each opencode session's status (running / needs-you / done-unseen / done-seen) and title on its Zellij tab",
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "opencode",
+    "opencode-plugin",
+    "zellij",
+    "terminal",
+    "tab",
+    "status"
+  ],
+  "author": "Aidan Gallagher",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/aidan-gallagher/opencode-zellij-status.git"
+  },
+  "homepage": "https://github.com/aidan-gallagher/opencode-zellij-status#readme",
+  "devDependencies": {
+    "@opencode-ai/plugin": "1.4.8",
+    "@types/node": "^22",
+    "typescript": "^5"
+  }
+}
