@@ -9,9 +9,7 @@ and which finished five minutes ago. So you keep clicking through them.
 
 This plugin puts a live status icon on each tab:
 
-
-
-Now a glance at the tab bar tells you where to go next.
+![opencode status icons on each Zellij tab](assets/tab-states.png)
 
 ## The four states
 
