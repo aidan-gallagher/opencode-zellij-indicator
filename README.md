@@ -1,53 +1,37 @@
 # opencode-zellij-indicator
 
-A tiny [opencode](https://opencode.ai) plugin that shows each opencode session's
-state on its [Zellij](https://zellij.dev) tab — so when you run one opencode per
-tab you can tell at a glance which ones are busy and which want you.
+**Know which of your opencode agents needs you — without switching tabs.**
 
-It's **just an opencode plugin**. No fork, no WASM, no status-bar replacement.
-It shells out to the `zellij` CLI (`rename-tab-by-id`) and does nothing when not
-running inside Zellij.
+When you run several [opencode](https://opencode.ai) sessions across
+[Zellij](https://zellij.dev) tabs, they all look identical. You can't see which
+one is still grinding, which is silently waiting for you to approve something,
+and which finished five minutes ago. So you keep clicking through them.
 
-## What you see
+This plugin puts a live status icon on each tab:
 
-The tab label becomes `<opencode session title> <icon>`, with four states:
 
-| State | Default icon | Meaning |
-|-------|--------------|---------|
-| running | ⏳ | opencode is working |
-| permission | ❓ | waiting on you — a permission prompt, an interactive `question`, or the plan-mode "switch to build agent?" prompt (always stands out, even when focused) |
-| done, unseen | 🔔 | finished and you haven't looked yet |
-| done, seen | ✅ | finished and you've since focused that tab |
 
-Icons only appear once a session actually does something; a fresh tab is left
-alone. When the session is deleted, the original tab name is restored.
+Now a glance at the tab bar tells you where to go next.
 
-## How it works
+## The four states
 
-- Finds its own tab: `zellij action list-panes --json` → the pane whose `id`
-  matches `$ZELLIJ_PANE_ID` → its `tab_id`.
-- Sets the label: `zellij action rename-tab-by-id <tab_id> "<title> <icon>"`
-  (targets the right tab even when it isn't focused).
-- Detects "seen": while in the unseen state it polls `zellij action list-clients`;
-  when the focused pane is `terminal_<id>` (you're looking at the tab) it flips to
-  the seen icon.
+| Icon | When | What it means for you |
+|------|------|-----------------------|
+| ⏳ | working | opencode is busy — ignore it for now |
+| ❓ | needs you | blocked on a permission prompt or a question — **go unblock it** |
+| 🔔 | done, unseen | it finished while you were away — go check the result |
+| ✅ | done, seen | finished, and you've already looked |
 
-State is driven by opencode hooks and events: `chat.message` /
-`tool.execute.before` → running; the `permission.asked` event → permission (and
-`permission.replied` → back to running); `session.idle` / `session.error` → done;
-subagent (`parentID`) idles and prompts are ignored so the tab stays "running"
-until the root session finishes. Permission is driven by the `permission.asked`
-event rather than the `permission.ask` hook, because that hook doesn't fire in
-current opencode — the event does (and the icon would otherwise never appear for
-ordinary tool prompts). `tool.execute.before` fires just before `permission.asked`,
-so the running-transition is suppressed while a prompt is open to avoid flipping
-the tab back to the running icon. The interactive `question` and `plan_exit` tools block waiting
-for you, so `tool.execute.before` for those shows the permission icon directly
-(and `tool.execute.after` flips back once you've answered).
 
 ## Install
 
-Add it to `opencode.json`'s `plugin` array (opencode fetches it from npm):
+**1. Get Zellij** (skip if you already have it). Zellij is a terminal workspace
+that splits your terminal into tabs and panes. Install a native build from
+[zellij.dev](https://zellij.dev) or with `cargo install zellij` — the Snap build
+doesn't work with this plugin.
+
+**2. Enable the plugin.** Add it to your `opencode.json`; opencode fetches it from
+npm on the next start:
 
 ```json
 {
@@ -55,51 +39,16 @@ Add it to `opencode.json`'s `plugin` array (opencode fetches it from npm):
 }
 ```
 
-Or, to run from a local checkout, symlink into opencode's plugin dir
-(auto-loaded at startup):
+**3. Run opencode inside Zellij.** Start a Zellij session, then launch opencode in
+it:
 
 ```sh
-mkdir -p ~/.config/opencode/plugins
-ln -sf "$PWD/src/index.ts" ~/.config/opencode/plugins/zellij-indicator.ts
+zellij      # opens the Zellij workspace
+opencode    # run this inside Zellij
 ```
 
-Note the directory is `plugins` (**plural**) — `plugin/` is silently ignored.
+That single tab now shows opencode's status. To feel the point of the plugin,
+open more tabs and run an opencode in each — press `Ctrl t` then `n` for a new
+tab (`Ctrl t` then the arrow keys to switch between them). The tab bar becomes
+your dashboard: ⏳ busy, ❓ waiting on you, 🔔 done, ✅ handled.
 
-## Configure
-
-Override any icon (or the poll interval) via env vars:
-
-```sh
-OPENCODE_ZELLIJ_ICON_RUNNING="⏳"    # default
-OPENCODE_ZELLIJ_ICON_PERMISSION="❓"  # default
-OPENCODE_ZELLIJ_ICON_ATTENTION="🔔"  # default (done, unseen)
-OPENCODE_ZELLIJ_ICON_SEEN="✅"        # default (done, seen)
-OPENCODE_ZELLIJ_POLL_MS="1500"
-OPENCODE_ZELLIJ_DEBUG="1"   # log to opencode's server log for troubleshooting
-```
-
-### Debugging
-
-Set `OPENCODE_ZELLIJ_DEBUG=1` and the plugin logs its lifecycle (init, resolved
-tab, every rename, focus transitions, and any `zellij` command failures) to
-opencode's **server log** — the quickest way to tell whether it loaded and what
-it's doing. If you see nothing at all, the plugin isn't being loaded: make sure
-the file is under `~/.config/opencode/plugins/` (**plural**).
-
-If you see `list-panes failed` (empty output) but `zellij` works fine in your
-shell, you're probably using the **snap** build of zellij. Snap zellij emits no
-output when spawned without a PTY (i.e. from opencode), so the plugin can't read
-the tab list. Fix: install a **native** zellij instead — grab the official static
-binary from [releases](https://github.com/zellij-org/zellij/releases) (e.g.
-`zellij-x86_64-unknown-linux-musl.tar.gz`) into `~/.local/bin`, or
-`cargo install zellij`, and make sure it precedes `/snap/bin` on your `PATH`.
-
-## Verify
-
-```sh
-bun run typecheck
-```
-
-Then, inside Zellij, run opencode in a couple of tabs and set them working — tabs
-turn ⏳ while busy, ❓ when awaiting permission, 🔔 when done and you haven't
-looked, ✅ once you focus them.
