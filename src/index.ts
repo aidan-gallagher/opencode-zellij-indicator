@@ -1,7 +1,7 @@
 import type { Plugin } from "@opencode-ai/plugin"
 
 // ---------------------------------------------------------------------------
-// opencode-zellij-status
+// opencode-zellij-indicator
 //
 // A pure opencode plugin that shows each opencode session's state on its Zellij
 // tab. No fork, no WASM, no status-bar replacement — it just shells out to the
@@ -42,7 +42,7 @@ const ASK_TOOLS = new Set(["question", "plan_exit"])
 // not the TUI. Invaluable for diagnosing "why isn't my tab renaming?".
 const DEBUG = process.env.OPENCODE_ZELLIJ_DEBUG === "1"
 const log = (msg: string) => {
-  if (DEBUG) console.error(`[zellij-status] ${msg}`)
+  if (DEBUG) console.error(`[zellij-indicator] ${msg}`)
 }
 
 // Strip any trailing status icon(s) so we recover the clean base tab name.

@@ -1,4 +1,4 @@
-# opencode-zellij-status
+# opencode-zellij-indicator
 
 A tiny [opencode](https://opencode.ai) plugin that shows each opencode session's
 state on its [Zellij](https://zellij.dev) tab — so when you run one opencode per
@@ -41,16 +41,23 @@ running (and `tool.execute.after` flips back once you've answered).
 
 ## Install
 
-Symlink into opencode's plugin dir (auto-loaded at startup):
+Add it to `opencode.json`'s `plugin` array (opencode fetches it from npm):
+
+```json
+{
+  "plugin": ["opencode-zellij-indicator"]
+}
+```
+
+Or, to run from a local checkout, symlink into opencode's plugin dir
+(auto-loaded at startup):
 
 ```sh
 mkdir -p ~/.config/opencode/plugins
-ln -sf "$PWD/src/index.ts" ~/.config/opencode/plugins/zellij-status.ts
+ln -sf "$PWD/src/index.ts" ~/.config/opencode/plugins/zellij-indicator.ts
 ```
 
 Note the directory is `plugins` (**plural**) — `plugin/` is silently ignored.
-
-(Or publish to npm and add it to `opencode.json`'s `plugin` array.)
 
 ## Configure
 
