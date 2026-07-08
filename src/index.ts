@@ -21,12 +21,13 @@ const env = (key: string, def: string) => {
   return v && v.length > 0 ? v : def
 }
 
-// The four icons. Defaults follow the "red = busy, question = needs you, green =
-// wants you, grey = handled" convention. Override with env vars for other glyphs.
-const ICON_RUNNING = env("OPENCODE_ZELLIJ_ICON_RUNNING", "🔴")
+// The four icons. Defaults: runner = busy, question = needs you, bell =
+// finished and wants your eyes, tick = you've since reviewed it. Override with
+// env vars for other glyphs (e.g. ⏳ if the runner doesn't render in your font).
+const ICON_RUNNING = env("OPENCODE_ZELLIJ_ICON_RUNNING", "🏃")
 const ICON_PERMISSION = env("OPENCODE_ZELLIJ_ICON_PERMISSION", "❓")
-const ICON_UNSEEN = env("OPENCODE_ZELLIJ_ICON_ATTENTION", "🟢")
-const ICON_SEEN = env("OPENCODE_ZELLIJ_ICON_SEEN", "⚪")
+const ICON_UNSEEN = env("OPENCODE_ZELLIJ_ICON_ATTENTION", "🔔")
+const ICON_SEEN = env("OPENCODE_ZELLIJ_ICON_SEEN", "✅")
 const ALL_ICONS = [ICON_RUNNING, ICON_PERMISSION, ICON_UNSEEN, ICON_SEEN].filter(
   (i) => i.length,
 )
@@ -35,7 +36,8 @@ const POLL_MS = Number.parseInt(env("OPENCODE_ZELLIJ_POLL_MS", "1500"), 10)
 
 // Tools that block waiting for the user (opencode's interactive question / the
 // plan-mode "switch to build agent?" prompt). While one of these runs, the
-// session is really waiting on you, so show the attention icon rather than 🔴.
+// session is really waiting on you, so show the permission icon rather than the
+// running one.
 const ASK_TOOLS = new Set(["question", "plan_exit"])
 
 // Debug logging (set OPENCODE_ZELLIJ_DEBUG=1). Goes to opencode's server log,

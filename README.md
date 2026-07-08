@@ -14,10 +14,10 @@ The tab label becomes `<opencode session title> <icon>`, with four states:
 
 | State | Default icon | Meaning |
 |-------|--------------|---------|
-| running | 🔴 | opencode is working |
+| running | 🏃 | opencode is working |
 | permission | ❓ | waiting on you — a permission prompt, an interactive `question`, or the plan-mode "switch to build agent?" prompt (always stands out, even when focused) |
-| done, unseen | 🟢 | finished and you haven't looked yet |
-| done, seen | ⚪ | finished and you've since focused that tab |
+| done, unseen | 🔔 | finished and you haven't looked yet |
+| done, seen | ✅ | finished and you've since focused that tab |
 
 Icons only appear once a session actually does something; a fresh tab is left
 alone. When the session is deleted, the original tab name is restored.
@@ -41,7 +41,7 @@ event rather than the `permission.ask` hook, because that hook doesn't fire in
 current opencode — the event does (and the icon would otherwise never appear for
 ordinary tool prompts). `tool.execute.before` fires just before `permission.asked`,
 so the running-transition is suppressed while a prompt is open to avoid flipping
-the tab back to 🔴. The interactive `question` and `plan_exit` tools block waiting
+the tab back to the running icon. The interactive `question` and `plan_exit` tools block waiting
 for you, so `tool.execute.before` for those shows the permission icon directly
 (and `tool.execute.after` flips back once you've answered).
 
@@ -70,10 +70,10 @@ Note the directory is `plugins` (**plural**) — `plugin/` is silently ignored.
 Override any icon (or the poll interval) via env vars:
 
 ```sh
-OPENCODE_ZELLIJ_ICON_RUNNING="⚡"
-OPENCODE_ZELLIJ_ICON_PERMISSION="❓"
-OPENCODE_ZELLIJ_ICON_ATTENTION="🟢"
-OPENCODE_ZELLIJ_ICON_SEEN="○"
+OPENCODE_ZELLIJ_ICON_RUNNING="🏃"    # default (⏳ works if the runner won't render)
+OPENCODE_ZELLIJ_ICON_PERMISSION="❓"  # default
+OPENCODE_ZELLIJ_ICON_ATTENTION="🔔"  # default (done, unseen)
+OPENCODE_ZELLIJ_ICON_SEEN="✅"        # default (done, seen)
 OPENCODE_ZELLIJ_POLL_MS="1500"
 OPENCODE_ZELLIJ_DEBUG="1"   # log to opencode's server log for troubleshooting
 ```
@@ -101,5 +101,5 @@ bun run typecheck
 ```
 
 Then, inside Zellij, run opencode in a couple of tabs and set them working — tabs
-turn 🔴 while busy, ❓ when awaiting permission, 🟢 when done and you haven't
-looked, ⚪ once you focus them.
+turn 🏃 while busy, ❓ when awaiting permission, 🔔 when done and you haven't
+looked, ✅ once you focus them.
