@@ -26,6 +26,9 @@
     "url": "git+https://github.com/aidan-gallagher/opencode-zellij-indicator.git"
   },
   "homepage": "https://github.com/aidan-gallagher/opencode-zellij-indicator#readme",
+  "bugs": {
+    "url": "https://github.com/aidan-gallagher/opencode-zellij-indicator/issues"
+  },
   "devDependencies": {
     "@opencode-ai/plugin": "1.4.8",
     "@types/node": "^22",

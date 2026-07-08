@@ -33,15 +33,17 @@ alone. When the session is deleted, the original tab name is restored.
   the seen icon.
 
 State is driven by opencode hooks and events: `chat.message` /
-`tool.execute.before` → running; `permission.updated` → permission (and
+`tool.execute.before` → running; the `permission.asked` event → permission (and
 `permission.replied` → back to running); `session.idle` / `session.error` → done;
 subagent (`parentID`) idles and prompts are ignored so the tab stays "running"
-until the root session finishes. opencode asks permission *before* it fires
-`tool.execute.before`, so while a prompt is open that running-transition is
-suppressed — otherwise the tab would flip back to 🔴 the instant the prompt
-appeared. The interactive `question` and `plan_exit` tools block waiting for you,
-so `tool.execute.before` for those shows the permission icon directly (and
-`tool.execute.after` flips back once you've answered).
+until the root session finishes. Permission is driven by the `permission.asked`
+event rather than the `permission.ask` hook, because that hook doesn't fire in
+current opencode — the event does (and the icon would otherwise never appear for
+ordinary tool prompts). `tool.execute.before` fires just before `permission.asked`,
+so the running-transition is suppressed while a prompt is open to avoid flipping
+the tab back to 🔴. The interactive `question` and `plan_exit` tools block waiting
+for you, so `tool.execute.before` for those shows the permission icon directly
+(and `tool.execute.after` flips back once you've answered).
 
 ## Install
 

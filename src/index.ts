@@ -181,6 +181,29 @@ export const ZellijStatus: Plugin = async ({ $ }) => {
 
   return {
     event: async ({ event }) => {
+      // Permission events are handled here rather than via the `permission.ask`
+      // hook (which doesn't fire in this opencode) and are read loosely because
+      // the SDK types lag the runtime: the real events are `permission.asked`
+      // (props: id, sessionID) and `permission.replied` (props: requestID, reply)
+      // — not the `permission.updated` / `permissionID` the .d.ts declares.
+      const type = event.type as string
+      const props = (event as { properties?: Record<string, unknown> }).properties ?? {}
+      if (type === "permission.asked") {
+        const sessionID = props.sessionID as string | undefined
+        if (!sessionID || !subagents.has(sessionID)) {
+          pendingPerms.add(String(props.id))
+          await setPermission()
+        }
+        return
+      }
+      if (type === "permission.replied") {
+        pendingPerms.delete(String(props.requestID))
+        // Prompt answered — resume "running"; a follow-up session.idle/error
+        // will settle it to done if the turn is actually finished.
+        if (pendingPerms.size === 0 && phase === "permission") await setRunning()
+        return
+      }
+
       switch (event.type) {
         case "session.created":
         case "session.updated": {
@@ -203,23 +226,6 @@ export const ZellijStatus: Plugin = async ({ $ }) => {
         }
         case "session.error": {
           await setDone()
-          break
-        }
-        // A permission prompt is waiting on you. Drive this from the event (not
-        // just the permission.ask hook) so it survives the tool.execute.before
-        // that opencode fires straight afterwards.
-        case "permission.updated": {
-          const perm = event.properties
-          if (subagents.has(perm.sessionID)) break // subagent prompt — ignore
-          pendingPerms.add(perm.id)
-          await setPermission()
-          break
-        }
-        // Prompt answered — resume "running"; a follow-up session.idle/error
-        // will settle it to done if the turn is actually finished.
-        case "permission.replied": {
-          pendingPerms.delete(event.properties.permissionID)
-          if (pendingPerms.size === 0 && phase === "permission") await setRunning()
           break
         }
         case "session.deleted": {
@@ -248,9 +254,10 @@ export const ZellijStatus: Plugin = async ({ $ }) => {
       log(`tool.execute.before tool=${JSON.stringify(input.tool)}`)
       // Interactive prompts (question / plan_exit) are waiting on the user.
       if (ASK_TOOLS.has(input.tool)) await setPermission()
-      // A permission prompt for this tool is still open — keep the permission
-      // icon instead of clobbering it with "running" (opencode asks before it
-      // fires this hook).
+      // Safety net: if a permission prompt is already open for this tool, don't
+      // clobber the ❓ icon with "running". (Normally this hook fires just
+      // before `permission.asked`, so pendingPerms is still empty here and the
+      // asked event repaints ❓ a beat later — but guard against either order.)
       else if (pendingPerms.size > 0) log("tool.execute.before while permission pending — not clobbering")
       else await setRunning()
     },
@@ -260,7 +267,8 @@ export const ZellijStatus: Plugin = async ({ $ }) => {
       if (ASK_TOOLS.has(input.tool)) await setRunning()
     },
 
-    // A permission prompt gets its own always-visible icon.
+    // Belt-and-braces for opencode versions that fire this hook (the current
+    // one drives permission state from the `permission.asked` event instead).
     "permission.ask": async () => {
       await setPermission()
     },
