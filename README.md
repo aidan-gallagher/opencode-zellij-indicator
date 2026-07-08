@@ -14,7 +14,7 @@ The tab label becomes `<opencode session title> <icon>`, with four states:
 
 | State | Default icon | Meaning |
 |-------|--------------|---------|
-| running | 🏃 | opencode is working |
+| running | ⏳ | opencode is working |
 | permission | ❓ | waiting on you — a permission prompt, an interactive `question`, or the plan-mode "switch to build agent?" prompt (always stands out, even when focused) |
 | done, unseen | 🔔 | finished and you haven't looked yet |
 | done, seen | ✅ | finished and you've since focused that tab |
@@ -70,7 +70,7 @@ Note the directory is `plugins` (**plural**) — `plugin/` is silently ignored.
 Override any icon (or the poll interval) via env vars:
 
 ```sh
-OPENCODE_ZELLIJ_ICON_RUNNING="🏃"    # default (⏳ works if the runner won't render)
+OPENCODE_ZELLIJ_ICON_RUNNING="⏳"    # default
 OPENCODE_ZELLIJ_ICON_PERMISSION="❓"  # default
 OPENCODE_ZELLIJ_ICON_ATTENTION="🔔"  # default (done, unseen)
 OPENCODE_ZELLIJ_ICON_SEEN="✅"        # default (done, seen)
@@ -101,5 +101,5 @@ bun run typecheck
 ```
 
 Then, inside Zellij, run opencode in a couple of tabs and set them working — tabs
-turn 🏃 while busy, ❓ when awaiting permission, 🔔 when done and you haven't
+turn ⏳ while busy, ❓ when awaiting permission, 🔔 when done and you haven't
 looked, ✅ once you focus them.

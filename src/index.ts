@@ -21,10 +21,10 @@ const env = (key: string, def: string) => {
   return v && v.length > 0 ? v : def
 }
 
-// The four icons. Defaults: runner = busy, question = needs you, bell =
-// finished and wants your eyes, tick = you've since reviewed it. Override with
-// env vars for other glyphs (e.g. ⏳ if the runner doesn't render in your font).
-const ICON_RUNNING = env("OPENCODE_ZELLIJ_ICON_RUNNING", "🏃")
+// The four icons. Defaults: hourglass = busy, question = needs you, bell =
+// finished and wants your eyes, tick = you've since reviewed it. Override any of
+// them with env vars for other glyphs.
+const ICON_RUNNING = env("OPENCODE_ZELLIJ_ICON_RUNNING", "⏳")
 const ICON_PERMISSION = env("OPENCODE_ZELLIJ_ICON_PERMISSION", "❓")
 const ICON_UNSEEN = env("OPENCODE_ZELLIJ_ICON_ATTENTION", "🔔")
 const ICON_SEEN = env("OPENCODE_ZELLIJ_ICON_SEEN", "✅")
