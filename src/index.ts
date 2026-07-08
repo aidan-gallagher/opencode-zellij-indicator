@@ -79,6 +79,10 @@ export const ZellijStatus: Plugin = async ({ $ }) => {
   let tabId: number | undefined
   let rootSessionID: string | undefined
   const subagents = new Set<string>()
+  // Permission prompts currently awaiting an answer (by permission id). opencode
+  // asks permission *before* firing tool.execute.before, so we track the pending
+  // prompts to stop that running-transition from clobbering the permission icon.
+  const pendingPerms = new Set<string>()
   let lastName: string | undefined
   let pollTimer: ReturnType<typeof setInterval> | undefined
 
@@ -201,6 +205,23 @@ export const ZellijStatus: Plugin = async ({ $ }) => {
           await setDone()
           break
         }
+        // A permission prompt is waiting on you. Drive this from the event (not
+        // just the permission.ask hook) so it survives the tool.execute.before
+        // that opencode fires straight afterwards.
+        case "permission.updated": {
+          const perm = event.properties
+          if (subagents.has(perm.sessionID)) break // subagent prompt — ignore
+          pendingPerms.add(perm.id)
+          await setPermission()
+          break
+        }
+        // Prompt answered — resume "running"; a follow-up session.idle/error
+        // will settle it to done if the turn is actually finished.
+        case "permission.replied": {
+          pendingPerms.delete(event.properties.permissionID)
+          if (pendingPerms.size === 0 && phase === "permission") await setRunning()
+          break
+        }
         case "session.deleted": {
           const info = event.properties.info
           if (info.parentID) {
@@ -227,6 +248,10 @@ export const ZellijStatus: Plugin = async ({ $ }) => {
       log(`tool.execute.before tool=${JSON.stringify(input.tool)}`)
       // Interactive prompts (question / plan_exit) are waiting on the user.
       if (ASK_TOOLS.has(input.tool)) await setPermission()
+      // A permission prompt for this tool is still open — keep the permission
+      // icon instead of clobbering it with "running" (opencode asks before it
+      // fires this hook).
+      else if (pendingPerms.size > 0) log("tool.execute.before while permission pending — not clobbering")
       else await setRunning()
     },
 
