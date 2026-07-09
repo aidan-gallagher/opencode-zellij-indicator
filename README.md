@@ -7,39 +7,35 @@ When you run several [opencode](https://opencode.ai) sessions across
 one is still grinding, which is silently waiting for you to approve something,
 and which finished five minutes ago. So you keep clicking through them.
 
-This plugin puts a live status icon on each tab:
-
-![opencode status icons on each Zellij tab](assets/tab-states.png)
-
 ## The four states
 
 | Icon | When | What it means for you |
 |------|------|-----------------------|
 | ⏳ | working | opencode is busy — ignore it for now |
-| ❓ | needs you | blocked on a permission prompt or a question — **go unblock it** |
+| ❓ | needs you | blocked on a permission prompt or a question — go unblock it |
 | 🔔 | done, unseen | it finished while you were away — go check the result |
 | ✅ | done, seen | finished, and you've already looked |
+
+## Example
+
+![opencode status icons on each Zellij tab](assets/tab-states.png)
+
+
 
 
 ## Install
 
-**1. Get Zellij** (skip if you already have it). Zellij is a terminal workspace
-that splits your terminal into tabs and panes. Install a native build from
-[zellij.dev](https://zellij.dev) or with `cargo install zellij` — the Snap build
-doesn't work with this plugin.
+**1. Install Zellij and OpenCode**
 
-**2. Enable the plugin.** Add it to your `opencode.json`; opencode fetches it from
-npm on the next start:
-
+**2. Enable the plugin.**   
+Add the following to your `opencode.json`
 ```json
 {
   "plugin": ["opencode-zellij-indicator"]
 }
 ```
 
-**3. Run opencode inside Zellij.** Start a Zellij session, then launch opencode in
-it:
-
+**3. Run opencode inside Zellij.**
 ```sh
 zellij      # opens the Zellij workspace
 opencode    # run this inside Zellij
