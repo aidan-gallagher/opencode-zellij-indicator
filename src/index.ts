@@ -1,4 +1,5 @@
 import type { Plugin } from "@opencode-ai/plugin"
+import { fileURLToPath } from "node:url"
 
 // ---------------------------------------------------------------------------
 // opencode-zellij-indicator
@@ -35,6 +36,31 @@ const ALL_ICONS = [ICON_RUNNING, ICON_RETRY, ICON_PERMISSION, ICON_UNSEEN, ICON_
 )
 
 const ELAPSED_ENABLED = process.env.OPENCODE_ZELLIJ_ELAPSED === "1"
+
+// Sound notification when a turn finishes while you're NOT looking at its tab
+// (the 🔔 "done, unseen" state). Opt-in, off by default.
+//   OPENCODE_ZELLIJ_BEEP=1            enable
+//   OPENCODE_ZELLIJ_BEEP_CMD="..."    run this command instead of the built-in
+//                                     player (e.g. "pw-play ~/alert.wav")
+// When BEEP_CMD is unset we play the bundled WAV via the first audio player we
+// find. If no player exists we silently do nothing — audio is never guaranteed.
+const BEEP_ENABLED = process.env.OPENCODE_ZELLIJ_BEEP === "1"
+const BEEP_CMD = (() => {
+  const v = process.env.OPENCODE_ZELLIJ_BEEP_CMD
+  return v && v.length > 0 ? v : undefined
+})()
+const BUNDLED_SOUND = fileURLToPath(new URL("../sounds/complete.wav", import.meta.url))
+// Ordered by preference; the first one present on the system wins. aplay/paplay
+// handle WAV; ffplay is the catch-all. macOS uses afplay.
+const BEEP_PLAYERS: Array<[string, string[]]> =
+  process.platform === "darwin"
+    ? [["afplay", [BUNDLED_SOUND]]]
+    : [
+        ["paplay", [BUNDLED_SOUND]],
+        ["pw-play", [BUNDLED_SOUND]],
+        ["aplay", ["-q", BUNDLED_SOUND]],
+        ["ffplay", ["-nodisp", "-autoexit", "-loglevel", "quiet", BUNDLED_SOUND]],
+      ]
 
 const DEFAULT_POLL_MS = 1500
 const pollParsed = Number.parseInt(env("OPENCODE_ZELLIJ_POLL_MS", String(DEFAULT_POLL_MS)), 10)
@@ -94,9 +120,41 @@ export const ZellijStatus: Plugin = async ({ $ }) => {
   let pollTimer: ReturnType<typeof setInterval> | undefined
   let runStartedAt: number | undefined
   let elapsedTimer: ReturnType<typeof setTimeout> | undefined
+  let lastBeepAt = 0
 
   const renameTab = (id: number, name: string) =>
     $`zellij action rename-tab-by-id ${id} ${name}`.quiet().nothrow()
+
+  // Fire-and-forget notification sound. Fully swallows errors and never blocks
+  // the event loop, so a missing player or audio glitch can never break the
+  // plugin. A short time-guard stops accidental double-beeps.
+  async function beep() {
+    if (!BEEP_ENABLED) return
+    const now = Date.now()
+    if (now - lastBeepAt < 2000) return
+    lastBeepAt = now
+    try {
+      if (BEEP_CMD) {
+        log(`beep via BEEP_CMD: ${BEEP_CMD}`)
+        await $`sh -c ${BEEP_CMD}`.quiet().nothrow()
+        return
+      }
+      for (const [cmd, args] of BEEP_PLAYERS) {
+        try {
+          const res = await $`${cmd} ${args}`.quiet().nothrow()
+          if (res.exitCode === 0) {
+            log(`beep via ${cmd}`)
+            return
+          }
+        } catch {
+          // try the next player
+        }
+      }
+      log("beep: no working audio player found")
+    } catch (e) {
+      log(`beep failed: ${e instanceof Error ? e.message : "unknown"}`)
+    }
+  }
 
   const iconFor = () => {
     if (phase === "running") return ICON_RUNNING
@@ -229,12 +287,18 @@ export const ZellijStatus: Plugin = async ({ $ }) => {
 
   // "done" covers finished turns and errors.
   async function setDone() {
+    const wasDone = phase === "done"
     phase = "done"
     runStartedAt = undefined
     stopElapsed()
     seen = await isFocused() // if you're already looking, it's immediately "seen"
     await render()
-    if (!seen) startPoll()
+    if (!seen) {
+      startPoll()
+      // Finished while you were away — alert once, on the transition only (so
+      // a following session.error can't double-beep the same finished turn).
+      if (!wasDone) void beep()
+    }
   }
 
   // Waiting on a permission prompt — always stands out, regardless of focus.

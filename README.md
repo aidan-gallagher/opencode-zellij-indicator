@@ -61,5 +61,20 @@ After a session has been running for a minute, the elapsed time appears next to 
 
 ![Elapsed time on a running tab](docs/elapsed-time.png)
 
+### Sound notification
+
+To play a sound when OpenCode completes a task in a background Zellij task set OPENCODE_ZELLIJ_BEEP=1 an environment variable before launching OpenCode:
+
+```sh
+OPENCODE_ZELLIJ_BEEP=1 opencode
+```
+
+If you don't like the default noise, you can customize the beep command.
+with `OPENCODE_ZELLIJ_BEEP_CMD`
+```sh
+OPENCODE_ZELLIJ_BEEP=1 OPENCODE_ZELLIJ_BEEP_CMD="pw-play ~/alert.wav" opencode
+```
+
+
 
 
