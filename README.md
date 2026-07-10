@@ -7,11 +7,12 @@ When you run several [OpenCode](https://opencode.ai) sessions across
 one is still grinding, which is silently waiting for you to approve something,
 and which finished five minutes ago. So you keep clicking through them.
 
-## The four states
+## The five states
 
 | Icon | When | What it means for you |
 |------|------|-----------------------|
 | ⏳ | working | OpenCode is busy — ignore it for now |
+| 🔁 | retrying | a request failed; OpenCode is backing off and retrying — usually nothing to do |
 | ❓ | needs you | blocked on a permission prompt or a question — go unblock it |
 | 🔔 | done, unseen | it finished while you were away — go check the result |
 | ✅ | done, seen | finished, and you've already looked |
@@ -26,7 +27,8 @@ OpenCode gives each session an auto-generated title, and the plugin uses that as
 
 ## Install
 
-**1. Install Zellij and OpenCode**
+**1. Install Zellij and OpenCode.**  
+Requires **Zellij ≥ 0.44.0** — the plugin uses the `list-panes` and `rename-tab-by-id` actions added in that release.
 
 **2. Enable the plugin.**   
 Add the following to your `opencode.json`
@@ -44,6 +46,5 @@ opencode    # run this inside Zellij
 
 That single tab now shows OpenCode's status. To feel the point of the plugin,
 open more tabs and run OpenCode in each — press `Ctrl t` then `n` for a new
-tab (`Ctrl t` then the arrow keys to switch between them). The tab bar becomes
-your dashboard: ⏳ busy, ❓ waiting on you, 🔔 done, ✅ handled.
+tab (`Ctrl t` then the arrow keys to switch between them).
 

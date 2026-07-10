@@ -7,11 +7,12 @@ import type { Plugin } from "@opencode-ai/plugin"
 // tab. No fork, no WASM, no status-bar replacement — it just shells out to the
 // `zellij` CLI (`rename-tab-by-id`) and no-ops when not running inside Zellij.
 //
-// Four states, each a configurable icon:
+// Five states, each a configurable icon:
 //   1. running       — opencode is working
-//   2. permission    — waiting for you to approve/deny (always stands out)
-//   3. done, unseen  — finished and you haven't looked yet
-//   4. done, seen    — finished and you've since focused that tab
+//   2. retry         — a request failed and opencode is retrying (backoff)
+//   3. permission    — waiting for you to approve/deny (always stands out)
+//   4. done, unseen  — finished and you haven't looked yet
+//   5. done, seen    — finished and you've since focused that tab
 //
 // The tab label becomes "<opencode session title> <icon>".
 // ---------------------------------------------------------------------------
@@ -21,14 +22,15 @@ const env = (key: string, def: string) => {
   return v && v.length > 0 ? v : def
 }
 
-// The four icons. Defaults: hourglass = busy, question = needs you, bell =
-// finished and wants your eyes, tick = you've since reviewed it. Override any of
-// them with env vars for other glyphs.
+// The five icons. Defaults: hourglass = busy, repeat = retrying after a failed
+// request, question = needs you, bell = finished and wants your eyes, tick =
+// you've since reviewed it. Override any of them with env vars for other glyphs.
 const ICON_RUNNING = env("OPENCODE_ZELLIJ_ICON_RUNNING", "⏳")
+const ICON_RETRY = env("OPENCODE_ZELLIJ_ICON_RETRY", "🔁")
 const ICON_PERMISSION = env("OPENCODE_ZELLIJ_ICON_PERMISSION", "❓")
 const ICON_UNSEEN = env("OPENCODE_ZELLIJ_ICON_ATTENTION", "🔔")
 const ICON_SEEN = env("OPENCODE_ZELLIJ_ICON_SEEN", "✅")
-const ALL_ICONS = [ICON_RUNNING, ICON_PERMISSION, ICON_UNSEEN, ICON_SEEN].filter(
+const ALL_ICONS = [ICON_RUNNING, ICON_RETRY, ICON_PERMISSION, ICON_UNSEEN, ICON_SEEN].filter(
   (i) => i.length,
 )
 
@@ -74,7 +76,7 @@ export const ZellijStatus: Plugin = async ({ $ }) => {
   }
   log(`init: pane=${paneId} session=${process.env.ZELLIJ_SESSION_NAME}`)
 
-  let phase: "running" | "permission" | "done" = "done"
+  let phase: "running" | "retry" | "permission" | "done" = "done"
   let seen = true
   let title: string | undefined
   let baseName: string | undefined
@@ -90,6 +92,7 @@ export const ZellijStatus: Plugin = async ({ $ }) => {
 
   const iconFor = () => {
     if (phase === "running") return ICON_RUNNING
+    if (phase === "retry") return ICON_RETRY
     if (phase === "permission") return ICON_PERMISSION
     return seen ? ICON_SEEN : ICON_UNSEEN
   }
@@ -165,6 +168,15 @@ export const ZellijStatus: Plugin = async ({ $ }) => {
     await render()
   }
 
+  // A model/provider request failed and opencode is backing off + retrying. Not
+  // "needs you" — just surfaced so a stalled turn doesn't keep masquerading as
+  // busy while it waits between attempts.
+  async function setRetry() {
+    phase = "retry"
+    stopPoll()
+    await render()
+  }
+
   // "done" covers finished turns and errors.
   async function setDone() {
     phase = "done"
@@ -218,6 +230,22 @@ export const ZellijStatus: Plugin = async ({ $ }) => {
               title = info.title
               await render()
             }
+          }
+          break
+        }
+        case "session.status": {
+          // status is one of { type: "busy" | "idle" | "retry" }. "idle" is
+          // covered by the dedicated session.idle event below, so here we only
+          // act on retry (surface the backoff) and busy (resume from retry).
+          if (subagents.has(event.properties.sessionID)) break // subagent only
+          const status = event.properties.status
+          if (status.type === "retry") {
+            await setRetry()
+          } else if (status.type === "busy") {
+            // Resume once a retry succeeds — but never clobber an open
+            // permission prompt (❓) or one that's mid-flight.
+            if (phase === "retry") await setRunning()
+            else if (phase !== "permission" && pendingPerms.size === 0) await setRunning()
           }
           break
         }
