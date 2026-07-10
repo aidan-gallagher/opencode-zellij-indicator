@@ -34,6 +34,8 @@ const ALL_ICONS = [ICON_RUNNING, ICON_RETRY, ICON_PERMISSION, ICON_UNSEEN, ICON_
   (i) => i.length,
 )
 
+const ELAPSED_ENABLED = process.env.OPENCODE_ZELLIJ_ELAPSED === "1"
+
 const DEFAULT_POLL_MS = 1500
 const pollParsed = Number.parseInt(env("OPENCODE_ZELLIJ_POLL_MS", String(DEFAULT_POLL_MS)), 10)
 const POLL_MS = Number.isFinite(pollParsed) ? pollParsed : DEFAULT_POLL_MS
@@ -90,6 +92,8 @@ export const ZellijStatus: Plugin = async ({ $ }) => {
   const pendingPerms = new Set<string>()
   let lastName: string | undefined
   let pollTimer: ReturnType<typeof setInterval> | undefined
+  let runStartedAt: number | undefined
+  let elapsedTimer: ReturnType<typeof setTimeout> | undefined
 
   const renameTab = (id: number, name: string) =>
     $`zellij action rename-tab-by-id ${id} ${name}`.quiet().nothrow()
@@ -99,6 +103,38 @@ export const ZellijStatus: Plugin = async ({ $ }) => {
     if (phase === "retry") return ICON_RETRY
     if (phase === "permission") return ICON_PERMISSION
     return seen ? ICON_SEEN : ICON_UNSEEN
+  }
+
+  // Returns compact elapsed string once >= 1 min, or undefined if not yet.
+  function elapsedStr(): string | undefined {
+    if (!ELAPSED_ENABLED || !runStartedAt || phase !== "running") return undefined
+    const mins = Math.floor((Date.now() - runStartedAt) / 60_000)
+    if (mins < 1) return undefined
+    if (mins < 60) return `${mins}`
+    const h = Math.floor(mins / 60)
+    const m = mins % 60
+    return m === 0 ? `${h}h` : `${h}h${m}`
+  }
+
+  function stopElapsed() {
+    if (elapsedTimer) {
+      clearTimeout(elapsedTimer)
+      elapsedTimer = undefined
+    }
+  }
+
+  function scheduleElapsed() {
+    if (!ELAPSED_ENABLED || elapsedTimer) return
+    // Fire on the next minute boundary from runStartedAt.
+    const elapsed = Date.now() - (runStartedAt ?? Date.now())
+    const msUntilNextMinute = 60_000 - (elapsed % 60_000)
+    elapsedTimer = setTimeout(async () => {
+      elapsedTimer = undefined
+      if (phase !== "running") return
+      await render()
+      scheduleElapsed() // reschedule for the following minute
+    }, msUntilNextMinute)
+    elapsedTimer.unref?.()
   }
 
   async function refreshTab() {
@@ -138,10 +174,14 @@ export const ZellijStatus: Plugin = async ({ $ }) => {
     await refreshTab()
     if (tabId === undefined) return
     const label = (title && title.trim()) || (baseName && baseName.trim()) || ""
-    const name = label ? `${label} ${iconFor()}` : iconFor()
+    const elapsed = elapsedStr()
+    const icon = iconFor()
+    const name = label
+      ? elapsed ? `${label} ${icon} (⏱ ${elapsed})` : `${label} ${icon}`
+      : elapsed ? `${icon} (⏱ ${elapsed})` : icon
     if (name === lastName) return
     lastName = name
-    log(`rename tab ${tabId} -> ${JSON.stringify(name)} (phase=${phase} seen=${seen})`)
+    log(`rename tab ${tabId} -> ${JSON.stringify(name)} (phase=${phase} seen=${seen} elapsed=${elapsed})`)
     await renameTab(tabId, name)
   }
 
@@ -167,6 +207,10 @@ export const ZellijStatus: Plugin = async ({ $ }) => {
   }
 
   async function setRunning() {
+    if (phase !== "running") {
+      runStartedAt = Date.now()
+      scheduleElapsed()
+    }
     phase = "running"
     stopPoll()
     await render()
@@ -177,6 +221,8 @@ export const ZellijStatus: Plugin = async ({ $ }) => {
   // busy while it waits between attempts.
   async function setRetry() {
     phase = "retry"
+    runStartedAt = undefined
+    stopElapsed()
     stopPoll()
     await render()
   }
@@ -184,6 +230,8 @@ export const ZellijStatus: Plugin = async ({ $ }) => {
   // "done" covers finished turns and errors.
   async function setDone() {
     phase = "done"
+    runStartedAt = undefined
+    stopElapsed()
     seen = await isFocused() // if you're already looking, it's immediately "seen"
     await render()
     if (!seen) startPoll()
@@ -192,6 +240,8 @@ export const ZellijStatus: Plugin = async ({ $ }) => {
   // Waiting on a permission prompt — always stands out, regardless of focus.
   async function setPermission() {
     phase = "permission"
+    runStartedAt = undefined
+    stopElapsed()
     seen = false
     stopPoll()
     await render()

@@ -48,3 +48,18 @@ That single tab now shows OpenCode's status. To feel the point of the plugin,
 open more tabs and run OpenCode in each — press `Ctrl t` then `n` for a new
 tab (`Ctrl t` then the arrow keys to switch between them).
 
+## Configuration
+### Elapsed time
+
+To see how long a session has been running, set `OPENCODE_ZELLIJ_ELAPSED=1` an environment variable before launching OpenCode:
+
+```sh
+OPENCODE_ZELLIJ_ELAPSED=1 opencode
+```
+
+After a session has been running for a minute, the elapsed time appears next to the icon (the number is minutes):
+
+![Elapsed time on a running tab](assets/elapsed-time.png)
+
+
+
