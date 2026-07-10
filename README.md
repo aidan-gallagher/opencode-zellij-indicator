@@ -19,7 +19,7 @@ and which finished five minutes ago. So you keep clicking through them.
 
 ## Example
 
-![OpenCode status icons on each Zellij tab](assets/tab-states.png)
+![OpenCode status icons on each Zellij tab](docs/tab-states.png)
 
 ## Naming
 
@@ -59,7 +59,7 @@ OPENCODE_ZELLIJ_ELAPSED=1 opencode
 
 After a session has been running for a minute, the elapsed time appears next to the icon (the number is minutes):
 
-![Elapsed time on a running tab](assets/elapsed-time.png)
+![Elapsed time on a running tab](docs/elapsed-time.png)
 
 
 
