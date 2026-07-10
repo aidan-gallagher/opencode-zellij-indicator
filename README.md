@@ -28,7 +28,7 @@ OpenCode gives each session an auto-generated title, and the plugin uses that as
 ## Install
 
 **1. Install Zellij and OpenCode.**  
-Requires **Zellij ≥ 0.44.0** — the plugin uses the `list-panes` and `rename-tab-by-id` actions added in that release.
+Requires Zellij ≥ 0.44.0
 
 **2. Enable the plugin.**   
 Add the following to your `opencode.json`
