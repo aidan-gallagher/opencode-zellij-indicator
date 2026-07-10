@@ -83,7 +83,6 @@ export const ZellijStatus: Plugin = async ({ $ }) => {
   let title: string | undefined
   let baseName: string | undefined
   let tabId: number | undefined
-  let rootSessionID: string | undefined
   const subagents = new Set<string>()
   // Permission prompts currently awaiting an answer (by permission id). opencode
   // asks permission *before* firing tool.execute.before, so we track the pending
@@ -229,12 +228,9 @@ export const ZellijStatus: Plugin = async ({ $ }) => {
           const info = event.properties.info
           if (info.parentID) {
             subagents.add(info.id)
-          } else {
-            rootSessionID = info.id
-            if (info.title && info.title !== title) {
-              title = info.title
-              await render()
-            }
+          } else if (info.title && info.title !== title) {
+            title = info.title
+            await render()
           }
           break
         }
@@ -280,8 +276,7 @@ export const ZellijStatus: Plugin = async ({ $ }) => {
       }
     },
 
-    "chat.message": async (input) => {
-      if (!subagents.has(input.sessionID)) rootSessionID = input.sessionID
+    "chat.message": async () => {
       await setRunning()
     },
 
