@@ -1,6 +1,6 @@
 {
   "name": "opencode-zellij-indicator",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Show each opencode session's status (running / needs-you / done-unseen / done-seen) and title on its Zellij tab",
   "type": "module",
   "main": "src/index.ts",
