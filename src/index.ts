@@ -34,7 +34,9 @@ const ALL_ICONS = [ICON_RUNNING, ICON_RETRY, ICON_PERMISSION, ICON_UNSEEN, ICON_
   (i) => i.length,
 )
 
-const POLL_MS = Number.parseInt(env("OPENCODE_ZELLIJ_POLL_MS", "1500"), 10)
+const DEFAULT_POLL_MS = 1500
+const pollParsed = Number.parseInt(env("OPENCODE_ZELLIJ_POLL_MS", String(DEFAULT_POLL_MS)), 10)
+const POLL_MS = Number.isFinite(pollParsed) ? pollParsed : DEFAULT_POLL_MS
 
 // Tools that block waiting for the user (opencode's interactive question / the
 // plan-mode "switch to build agent?" prompt). While one of these runs, the
@@ -90,6 +92,9 @@ export const ZellijStatus: Plugin = async ({ $ }) => {
   let lastName: string | undefined
   let pollTimer: ReturnType<typeof setInterval> | undefined
 
+  const renameTab = (id: number, name: string) =>
+    $`zellij action rename-tab-by-id ${id} ${name}`.quiet().nothrow()
+
   const iconFor = () => {
     if (phase === "running") return ICON_RUNNING
     if (phase === "retry") return ICON_RETRY
@@ -138,7 +143,7 @@ export const ZellijStatus: Plugin = async ({ $ }) => {
     if (name === lastName) return
     lastName = name
     log(`rename tab ${tabId} -> ${JSON.stringify(name)} (phase=${phase} seen=${seen})`)
-    await $`zellij action rename-tab-by-id ${tabId} ${name}`.quiet().nothrow()
+    await renameTab(tabId, name)
   }
 
   function stopPoll() {
@@ -158,8 +163,8 @@ export const ZellijStatus: Plugin = async ({ $ }) => {
         await render()
         stopPoll()
       }
-    }, Number.isFinite(POLL_MS) ? POLL_MS : 1500)
-    ;(pollTimer as { unref?: () => void }).unref?.()
+    }, POLL_MS)
+    pollTimer.unref?.()
   }
 
   async function setRunning() {
@@ -268,7 +273,7 @@ export const ZellijStatus: Plugin = async ({ $ }) => {
           if (tabId !== undefined && baseName !== undefined) {
             lastName = undefined
             log(`session deleted -> restore base name ${JSON.stringify(baseName)}`)
-            await $`zellij action rename-tab-by-id ${tabId} ${baseName}`.quiet().nothrow()
+            await renameTab(tabId, baseName)
           }
           break
         }
