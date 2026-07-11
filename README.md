@@ -37,6 +37,7 @@ Add the following to your `opencode.json`
   "plugin": ["opencode-zellij-indicator"]
 }
 ```
+Outside Zellij the plugin does nothing (it exits immediately), so it's safe to leave enabled everywhere at no cost.
 
 **3. Run OpenCode inside Zellij.**
 ```sh
