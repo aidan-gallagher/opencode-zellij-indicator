@@ -5,12 +5,12 @@
 
 import {
   ALL_ICONS,
-  ELAPSED_ENABLED,
   ICON_PERMISSION,
   ICON_RETRY,
   ICON_RUNNING,
   ICON_SEEN,
   ICON_UNSEEN,
+  STOPWATCH_ENABLED,
   type Phase,
 } from "./config"
 
@@ -37,10 +37,10 @@ export function iconFor(phase: Phase, seen: boolean): string {
   return seen ? ICON_SEEN : ICON_UNSEEN
 }
 
-// Returns compact elapsed string once >= 1 min, or undefined if not yet / not
+// Returns compact stopwatch string once >= 1 min, or undefined if not yet / not
 // applicable (feature disabled, not running, or no start time).
-export function formatElapsed(runStartedAt: number | undefined, phase: Phase): string | undefined {
-  if (!ELAPSED_ENABLED || !runStartedAt || phase !== "running") return undefined
+export function formatStopwatch(runStartedAt: number | undefined, phase: Phase): string | undefined {
+  if (!STOPWATCH_ENABLED || !runStartedAt || phase !== "running") return undefined
   const mins = Math.floor((Date.now() - runStartedAt) / 60_000)
   if (mins < 1) return undefined
   if (mins < 60) return `${mins}`

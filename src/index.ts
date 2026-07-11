@@ -1,6 +1,6 @@
 import type { Plugin } from "@opencode-ai/plugin"
-import { ASK_TOOLS, ELAPSED_ENABLED, POLL_MS, log, type Phase } from "./config"
-import { formatElapsed, iconFor, stripIcons } from "./format"
+import { ASK_TOOLS, POLL_MS, STOPWATCH_ENABLED, log, type Phase } from "./config"
+import { formatStopwatch, iconFor, stripIcons } from "./format"
 import { beep } from "./sound"
 import { isFocused, renameTab, resolvePane } from "./zellij"
 
@@ -47,27 +47,27 @@ export const ZellijStatus: Plugin = async ({ $ }) => {
   let lastName: string | undefined
   let pollTimer: ReturnType<typeof setInterval> | undefined
   let runStartedAt: number | undefined
-  let elapsedTimer: ReturnType<typeof setTimeout> | undefined
+  let stopwatchTimer: ReturnType<typeof setTimeout> | undefined
 
-  function stopElapsed() {
-    if (elapsedTimer) {
-      clearTimeout(elapsedTimer)
-      elapsedTimer = undefined
+  function endStopwatch() {
+    if (stopwatchTimer) {
+      clearTimeout(stopwatchTimer)
+      stopwatchTimer = undefined
     }
   }
 
-  function scheduleElapsed() {
-    if (!ELAPSED_ENABLED || elapsedTimer) return
+  function scheduleStopwatch() {
+    if (!STOPWATCH_ENABLED || stopwatchTimer) return
     // Fire on the next minute boundary from runStartedAt.
     const elapsed = Date.now() - (runStartedAt ?? Date.now())
     const msUntilNextMinute = 60_000 - (elapsed % 60_000)
-    elapsedTimer = setTimeout(async () => {
-      elapsedTimer = undefined
+    stopwatchTimer = setTimeout(async () => {
+      stopwatchTimer = undefined
       if (phase !== "running") return
       await render()
-      scheduleElapsed() // reschedule for the following minute
+      scheduleStopwatch() // reschedule for the following minute
     }, msUntilNextMinute)
-    elapsedTimer.unref?.()
+    stopwatchTimer.unref?.()
   }
 
   async function refreshTab() {
@@ -84,14 +84,14 @@ export const ZellijStatus: Plugin = async ({ $ }) => {
     await refreshTab()
     if (tabId === undefined) return
     const label = (title && title.trim()) || (baseName && baseName.trim()) || ""
-    const elapsed = formatElapsed(runStartedAt, phase)
+    const stopwatch = formatStopwatch(runStartedAt, phase)
     const icon = iconFor(phase, seen)
     const name = label
-      ? elapsed ? `${label} ${icon} (⏱ ${elapsed})` : `${label} ${icon}`
-      : elapsed ? `${icon} (⏱ ${elapsed})` : icon
+      ? stopwatch ? `${label} ${icon} (⏱ ${stopwatch})` : `${label} ${icon}`
+      : stopwatch ? `${icon} (⏱ ${stopwatch})` : icon
     if (name === lastName) return
     lastName = name
-    log(`rename tab ${tabId} -> ${JSON.stringify(name)} (phase=${phase} seen=${seen} elapsed=${elapsed})`)
+    log(`rename tab ${tabId} -> ${JSON.stringify(name)} (phase=${phase} seen=${seen} stopwatch=${stopwatch})`)
     await renameTab($, tabId, name)
   }
 
@@ -119,7 +119,7 @@ export const ZellijStatus: Plugin = async ({ $ }) => {
   async function setRunning() {
     if (phase !== "running") {
       runStartedAt = Date.now()
-      scheduleElapsed()
+      scheduleStopwatch()
     }
     phase = "running"
     stopPoll()
@@ -132,7 +132,7 @@ export const ZellijStatus: Plugin = async ({ $ }) => {
   async function setRetry() {
     phase = "retry"
     runStartedAt = undefined
-    stopElapsed()
+    endStopwatch()
     stopPoll()
     await render()
   }
@@ -142,7 +142,7 @@ export const ZellijStatus: Plugin = async ({ $ }) => {
     const wasDone = phase === "done"
     phase = "done"
     runStartedAt = undefined
-    stopElapsed()
+    endStopwatch()
     seen = await isFocused($, paneId) // if you're already looking, it's immediately "seen"
     await render()
     if (!seen) {
@@ -157,7 +157,7 @@ export const ZellijStatus: Plugin = async ({ $ }) => {
   async function setPermission() {
     phase = "permission"
     runStartedAt = undefined
-    stopElapsed()
+    endStopwatch()
     seen = false
     stopPoll()
     await render()
