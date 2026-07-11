@@ -49,6 +49,12 @@ That single tab now shows OpenCode's status. To feel the point of the plugin,
 open more tabs and run OpenCode in each — press `Ctrl t` then `n` for a new
 tab (`Ctrl t` then the arrow keys to switch between them).
 
+### Agent Setup 
+Prefer to let an agent do it? Copy this into your prompt:
+```
+Fetch https://raw.githubusercontent.com/aidan-gallagher/opencode-zellij-indicator/master/docs/agent-setup.md and follow the setup steps.
+```
+
 ## Configuration
 
 Set these as [environment variables](https://askubuntu.com/questions/730/how-do-i-set-environment-variables) before launching OpenCode.
@@ -67,6 +73,3 @@ Play a sound when OpenCode finishes in a background tab.
 
 `OPENCODE_ZELLIJ_SOUND_CMD="pw-play ~/alert.wav"`  
 Override the default sound with your own command.
-
-
-
