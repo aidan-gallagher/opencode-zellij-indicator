@@ -48,7 +48,7 @@ That single tab now shows OpenCode's status. To feel the point of the plugin,
 open more tabs and run OpenCode in each — press `Ctrl t` then `n` for a new
 tab (`Ctrl t` then the arrow keys to switch between them).
 
-## Optional Features
+## Configuration
 ### Stopwatch
 
 To see how long a session has been running, set `OPENCODE_ZELLIJ_STOPWATCH=1` an environment variable before launching OpenCode:
@@ -61,18 +61,18 @@ After a session has been running for a minute, the stopwatch appears next to the
 
 ![Stopwatch on a running tab](docs/stopwatch.png)
 
-### Sound notification
+### Sound
 
-To play a sound when OpenCode completes a task in a background Zellij task set OPENCODE_ZELLIJ_BEEP=1 an environment variable before launching OpenCode:
+To play a sound when OpenCode completes a task in a background Zellij task set `OPENCODE_ZELLIJ_SOUND=1` an environment variable before launching OpenCode:
 
 ```sh
-OPENCODE_ZELLIJ_BEEP=1 opencode
+OPENCODE_ZELLIJ_SOUND=1 opencode
 ```
 
-If you don't like the default noise, you can customize the beep command.
-with `OPENCODE_ZELLIJ_BEEP_CMD`
+If you don't like the default noise, you can customize the sound command.
+with `OPENCODE_ZELLIJ_SOUND_CMD`
 ```sh
-OPENCODE_ZELLIJ_BEEP=1 OPENCODE_ZELLIJ_BEEP_CMD="pw-play ~/alert.wav" opencode
+OPENCODE_ZELLIJ_SOUND=1 OPENCODE_ZELLIJ_SOUND_CMD="pw-play ~/alert.wav" opencode
 ```
 
 

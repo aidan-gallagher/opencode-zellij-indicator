@@ -1,7 +1,7 @@
 import type { Plugin } from "@opencode-ai/plugin"
 import { ASK_TOOLS, POLL_MS, STOPWATCH_ENABLED, log, type Phase } from "./config"
 import { formatStopwatch, iconFor, stripIcons } from "./format"
-import { beep } from "./sound"
+import { playSound } from "./sound"
 import { isFocused, renameTab, resolvePane } from "./zellij"
 
 // ---------------------------------------------------------------------------
@@ -19,7 +19,7 @@ import { isFocused, renameTab, resolvePane } from "./zellij"
 //   5. done, seen    — finished and you've since focused that tab
 //
 // The tab label becomes "<opencode session title> <icon>". Config, presentation
-// helpers, the zellij CLI wrappers and the beep live in sibling modules; this
+// helpers, the zellij CLI wrappers and the completion sound live in sibling modules; this
 // file owns the runtime state machine and event wiring.
 // ---------------------------------------------------------------------------
 
@@ -148,8 +148,8 @@ export const ZellijStatus: Plugin = async ({ $ }) => {
     if (!seen) {
       startPoll()
       // Finished while you were away — alert once, on the transition only (so
-      // a following session.error can't double-beep the same finished turn).
-      if (!wasDone) void beep($)
+      // a following session.error can't play the sound twice for the same finished turn).
+      if (!wasDone) void playSound($)
     }
   }
 
