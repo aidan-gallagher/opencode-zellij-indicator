@@ -50,32 +50,23 @@ open more tabs and run OpenCode in each — press `Ctrl t` then `n` for a new
 tab (`Ctrl t` then the arrow keys to switch between them).
 
 ## Configuration
+
+Set these as [environment variables](https://askubuntu.com/questions/730/how-do-i-set-environment-variables) before launching OpenCode.
+
 ### Stopwatch
 
-To see how long a session has been running, set `OPENCODE_ZELLIJ_STOPWATCH=1` an environment variable before launching OpenCode:
-
-```sh
-OPENCODE_ZELLIJ_STOPWATCH=1 opencode
-```
-
-After a session has been running for a minute, the stopwatch appears next to the icon (the number is minutes):
+`OPENCODE_ZELLIJ_STOPWATCH=1`   
+Show how long a session has been running. After a minute, the elapsed minutes appear next to the icon:
 
 ![Stopwatch on a running tab](docs/stopwatch.png)
 
 ### Sound
 
-To play a sound when OpenCode completes a task in a background Zellij task set `OPENCODE_ZELLIJ_SOUND=1` an environment variable before launching OpenCode:
+`OPENCODE_ZELLIJ_SOUND=1`   
+Play a sound when OpenCode finishes in a background tab.
 
-```sh
-OPENCODE_ZELLIJ_SOUND=1 opencode
-```
-
-If you don't like the default noise, you can customize the sound command.
-with `OPENCODE_ZELLIJ_SOUND_CMD`
-```sh
-OPENCODE_ZELLIJ_SOUND=1 OPENCODE_ZELLIJ_SOUND_CMD="pw-play ~/alert.wav" opencode
-```
-
+`OPENCODE_ZELLIJ_SOUND_CMD="pw-play ~/alert.wav"`  
+Override the default sound with your own command.
 
 
 
