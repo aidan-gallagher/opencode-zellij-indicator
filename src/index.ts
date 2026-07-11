@@ -1,5 +1,8 @@
 import type { Plugin } from "@opencode-ai/plugin"
-import { fileURLToPath } from "node:url"
+import { ASK_TOOLS, ELAPSED_ENABLED, POLL_MS, log, type Phase } from "./config"
+import { formatElapsed, iconFor, stripIcons } from "./format"
+import { beep } from "./sound"
+import { isFocused, renameTab, resolvePane } from "./zellij"
 
 // ---------------------------------------------------------------------------
 // opencode-zellij-indicator
@@ -15,85 +18,10 @@ import { fileURLToPath } from "node:url"
 //   4. done, unseen  — finished and you haven't looked yet
 //   5. done, seen    — finished and you've since focused that tab
 //
-// The tab label becomes "<opencode session title> <icon>".
+// The tab label becomes "<opencode session title> <icon>". Config, presentation
+// helpers, the zellij CLI wrappers and the beep live in sibling modules; this
+// file owns the runtime state machine and event wiring.
 // ---------------------------------------------------------------------------
-
-const env = (key: string, def: string) => {
-  const v = process.env[key]
-  return v && v.length > 0 ? v : def
-}
-
-// The five icons. Defaults: hourglass = busy, repeat = retrying after a failed
-// request, question = needs you, bell = finished and wants your eyes, tick =
-// you've since reviewed it. Override any of them with env vars for other glyphs.
-const ICON_RUNNING = env("OPENCODE_ZELLIJ_ICON_RUNNING", "⏳")
-const ICON_RETRY = env("OPENCODE_ZELLIJ_ICON_RETRY", "🔁")
-const ICON_PERMISSION = env("OPENCODE_ZELLIJ_ICON_PERMISSION", "❓")
-const ICON_UNSEEN = env("OPENCODE_ZELLIJ_ICON_ATTENTION", "🔔")
-const ICON_SEEN = env("OPENCODE_ZELLIJ_ICON_SEEN", "✅")
-const ALL_ICONS = [ICON_RUNNING, ICON_RETRY, ICON_PERMISSION, ICON_UNSEEN, ICON_SEEN].filter(
-  (i) => i.length,
-)
-
-const ELAPSED_ENABLED = process.env.OPENCODE_ZELLIJ_ELAPSED === "1"
-
-// Sound notification when a turn finishes while you're NOT looking at its tab
-// (the 🔔 "done, unseen" state). Opt-in, off by default.
-//   OPENCODE_ZELLIJ_BEEP=1            enable
-//   OPENCODE_ZELLIJ_BEEP_CMD="..."    run this command instead of the built-in
-//                                     player (e.g. "pw-play ~/alert.wav")
-// When BEEP_CMD is unset we play the bundled WAV via the first audio player we
-// find. If no player exists we silently do nothing — audio is never guaranteed.
-const BEEP_ENABLED = process.env.OPENCODE_ZELLIJ_BEEP === "1"
-const BEEP_CMD = (() => {
-  const v = process.env.OPENCODE_ZELLIJ_BEEP_CMD
-  return v && v.length > 0 ? v : undefined
-})()
-const BUNDLED_SOUND = fileURLToPath(new URL("../sounds/complete.wav", import.meta.url))
-// Ordered by preference; the first one present on the system wins. aplay/paplay
-// handle WAV; ffplay is the catch-all. macOS uses afplay.
-const BEEP_PLAYERS: Array<[string, string[]]> =
-  process.platform === "darwin"
-    ? [["afplay", [BUNDLED_SOUND]]]
-    : [
-        ["paplay", [BUNDLED_SOUND]],
-        ["pw-play", [BUNDLED_SOUND]],
-        ["aplay", ["-q", BUNDLED_SOUND]],
-        ["ffplay", ["-nodisp", "-autoexit", "-loglevel", "quiet", BUNDLED_SOUND]],
-      ]
-
-const DEFAULT_POLL_MS = 1500
-const pollParsed = Number.parseInt(env("OPENCODE_ZELLIJ_POLL_MS", String(DEFAULT_POLL_MS)), 10)
-const POLL_MS = Number.isFinite(pollParsed) ? pollParsed : DEFAULT_POLL_MS
-
-// Tools that block waiting for the user (opencode's interactive question / the
-// plan-mode "switch to build agent?" prompt). While one of these runs, the
-// session is really waiting on you, so show the permission icon rather than the
-// running one.
-const ASK_TOOLS = new Set(["question", "plan_exit"])
-
-// Debug logging (set OPENCODE_ZELLIJ_DEBUG=1). Goes to opencode's server log,
-// not the TUI. Invaluable for diagnosing "why isn't my tab renaming?".
-const DEBUG = process.env.OPENCODE_ZELLIJ_DEBUG === "1"
-const log = (msg: string) => {
-  if (DEBUG) console.error(`[zellij-indicator] ${msg}`)
-}
-
-// Strip any trailing status icon(s) so we recover the clean base tab name.
-function stripIcons(s: string): string {
-  let out = s.trimEnd()
-  let changed = true
-  while (changed) {
-    changed = false
-    for (const ic of ALL_ICONS) {
-      if (out.endsWith(ic)) {
-        out = out.slice(0, -ic.length).trimEnd()
-        changed = true
-      }
-    }
-  }
-  return out
-}
 
 export const ZellijStatus: Plugin = async ({ $ }) => {
   const paneIdRaw = process.env.ZELLIJ_PANE_ID
@@ -106,7 +34,7 @@ export const ZellijStatus: Plugin = async ({ $ }) => {
   }
   log(`init: pane=${paneId} session=${process.env.ZELLIJ_SESSION_NAME}`)
 
-  let phase: "running" | "retry" | "permission" | "done" = "done"
+  let phase: Phase = "done"
   let seen = true
   let title: string | undefined
   let baseName: string | undefined
@@ -120,59 +48,6 @@ export const ZellijStatus: Plugin = async ({ $ }) => {
   let pollTimer: ReturnType<typeof setInterval> | undefined
   let runStartedAt: number | undefined
   let elapsedTimer: ReturnType<typeof setTimeout> | undefined
-  let lastBeepAt = 0
-
-  const renameTab = (id: number, name: string) =>
-    $`zellij action rename-tab-by-id ${id} ${name}`.quiet().nothrow()
-
-  // Fire-and-forget notification sound. Fully swallows errors and never blocks
-  // the event loop, so a missing player or audio glitch can never break the
-  // plugin. A short time-guard stops accidental double-beeps.
-  async function beep() {
-    if (!BEEP_ENABLED) return
-    const now = Date.now()
-    if (now - lastBeepAt < 2000) return
-    lastBeepAt = now
-    try {
-      if (BEEP_CMD) {
-        log(`beep via BEEP_CMD: ${BEEP_CMD}`)
-        await $`sh -c ${BEEP_CMD}`.quiet().nothrow()
-        return
-      }
-      for (const [cmd, args] of BEEP_PLAYERS) {
-        try {
-          const res = await $`${cmd} ${args}`.quiet().nothrow()
-          if (res.exitCode === 0) {
-            log(`beep via ${cmd}`)
-            return
-          }
-        } catch {
-          // try the next player
-        }
-      }
-      log("beep: no working audio player found")
-    } catch (e) {
-      log(`beep failed: ${e instanceof Error ? e.message : "unknown"}`)
-    }
-  }
-
-  const iconFor = () => {
-    if (phase === "running") return ICON_RUNNING
-    if (phase === "retry") return ICON_RETRY
-    if (phase === "permission") return ICON_PERMISSION
-    return seen ? ICON_SEEN : ICON_UNSEEN
-  }
-
-  // Returns compact elapsed string once >= 1 min, or undefined if not yet.
-  function elapsedStr(): string | undefined {
-    if (!ELAPSED_ENABLED || !runStartedAt || phase !== "running") return undefined
-    const mins = Math.floor((Date.now() - runStartedAt) / 60_000)
-    if (mins < 1) return undefined
-    if (mins < 60) return `${mins}`
-    const h = Math.floor(mins / 60)
-    const m = mins % 60
-    return m === 0 ? `${h}h` : `${h}h${m}`
-  }
 
   function stopElapsed() {
     if (elapsedTimer) {
@@ -196,35 +71,12 @@ export const ZellijStatus: Plugin = async ({ $ }) => {
   }
 
   async function refreshTab() {
-    try {
-      const out = await $`zellij action list-panes --json --all`.quiet().nothrow().text()
-      const panes = JSON.parse(out) as Array<{
-        id: number
-        is_plugin: boolean
-        tab_id: number
-        tab_name?: string
-      }>
-      const mine = panes.find((p) => !p.is_plugin && p.id === paneId)
-      if (!mine) {
-        log(`could not find own pane (id=${paneId}) among ${panes.length} panes`)
-        return
-      }
-      tabId = mine.tab_id
-      if (baseName === undefined) {
-        baseName = stripIcons(String(mine.tab_name ?? ""))
-        log(`resolved tab: id=${tabId} baseName=${JSON.stringify(baseName)}`)
-      }
-    } catch (e) {
-      log(`list-panes failed: ${e instanceof Error ? e.message : "unknown"}`)
-    }
-  }
-
-  async function isFocused(): Promise<boolean> {
-    try {
-      const out = await $`zellij action list-clients`.quiet().nothrow().text()
-      return new RegExp(`\\bterminal_${paneId}\\b`).test(out)
-    } catch {
-      return false
+    const resolved = await resolvePane($, paneId)
+    if (!resolved) return
+    tabId = resolved.tabId
+    if (baseName === undefined) {
+      baseName = stripIcons(resolved.tabName)
+      log(`resolved tab: id=${tabId} baseName=${JSON.stringify(baseName)}`)
     }
   }
 
@@ -232,15 +84,15 @@ export const ZellijStatus: Plugin = async ({ $ }) => {
     await refreshTab()
     if (tabId === undefined) return
     const label = (title && title.trim()) || (baseName && baseName.trim()) || ""
-    const elapsed = elapsedStr()
-    const icon = iconFor()
+    const elapsed = formatElapsed(runStartedAt, phase)
+    const icon = iconFor(phase, seen)
     const name = label
       ? elapsed ? `${label} ${icon} (⏱ ${elapsed})` : `${label} ${icon}`
       : elapsed ? `${icon} (⏱ ${elapsed})` : icon
     if (name === lastName) return
     lastName = name
     log(`rename tab ${tabId} -> ${JSON.stringify(name)} (phase=${phase} seen=${seen} elapsed=${elapsed})`)
-    await renameTab(tabId, name)
+    await renameTab($, tabId, name)
   }
 
   function stopPoll() {
@@ -254,7 +106,7 @@ export const ZellijStatus: Plugin = async ({ $ }) => {
     if (pollTimer) return
     pollTimer = setInterval(async () => {
       if (phase !== "done" || seen) return stopPoll()
-      if (await isFocused()) {
+      if (await isFocused($, paneId)) {
         log("tab focused while done+unseen -> seen")
         seen = true
         await render()
@@ -291,13 +143,13 @@ export const ZellijStatus: Plugin = async ({ $ }) => {
     phase = "done"
     runStartedAt = undefined
     stopElapsed()
-    seen = await isFocused() // if you're already looking, it's immediately "seen"
+    seen = await isFocused($, paneId) // if you're already looking, it's immediately "seen"
     await render()
     if (!seen) {
       startPoll()
       // Finished while you were away — alert once, on the transition only (so
       // a following session.error can't double-beep the same finished turn).
-      if (!wasDone) void beep()
+      if (!wasDone) void beep($)
     }
   }
 
@@ -383,7 +235,7 @@ export const ZellijStatus: Plugin = async ({ $ }) => {
           if (tabId !== undefined && baseName !== undefined) {
             lastName = undefined
             log(`session deleted -> restore base name ${JSON.stringify(baseName)}`)
-            await renameTab(tabId, baseName)
+            await renameTab($, tabId, baseName)
           }
           break
         }
