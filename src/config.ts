@@ -5,24 +5,22 @@
 // state, and depends on nothing else in the plugin.
 // ---------------------------------------------------------------------------
 
-export type Phase = "running" | "retry" | "permission" | "done"
+export type Phase = "running" | "permission" | "done"
 
 const env = (key: string, def: string) => {
   const v = process.env[key]
   return v && v.length > 0 ? v : def
 }
 
-// The five icons. Defaults: hourglass = busy, repeat = retrying after a failed
-// request, question = needs you, bell = finished and wants your eyes, tick =
-// you've since reviewed it. Override any of them with env vars for other glyphs.
+// The four icons. Defaults: hourglass = busy, question = needs you, bell =
+// finished and wants your eyes, tick = you've since reviewed it. Override any of
+// them with env vars for other glyphs.
 export const ICON_RUNNING = env("OPENCODE_ZELLIJ_ICON_RUNNING", "⏳")
-export const ICON_RETRY = env("OPENCODE_ZELLIJ_ICON_RETRY", "🔁")
 export const ICON_PERMISSION = env("OPENCODE_ZELLIJ_ICON_PERMISSION", "❓")
 export const ICON_UNSEEN = env("OPENCODE_ZELLIJ_ICON_ATTENTION", "🔔")
 export const ICON_SEEN = env("OPENCODE_ZELLIJ_ICON_SEEN", "✅")
 export const ALL_ICONS = [
   ICON_RUNNING,
-  ICON_RETRY,
   ICON_PERMISSION,
   ICON_UNSEEN,
   ICON_SEEN,

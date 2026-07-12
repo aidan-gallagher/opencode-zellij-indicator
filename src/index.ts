@@ -11,12 +11,11 @@ import { isFocused, renameTab, resolvePane } from "./zellij"
 // tab. No fork, no WASM, no status-bar replacement — it just shells out to the
 // `zellij` CLI (`rename-tab-by-id`) and no-ops when not running inside Zellij.
 //
-// Five states, each a configurable icon:
+// Four states, each a configurable icon:
 //   1. running       — opencode is working
-//   2. retry         — a request failed and opencode is retrying (backoff)
-//   3. permission    — waiting for you to approve/deny (always stands out)
-//   4. done, unseen  — finished and you haven't looked yet
-//   5. done, seen    — finished and you've since focused that tab
+//   2. permission    — waiting for you to approve/deny (always stands out)
+//   3. done, unseen  — finished and you haven't looked yet
+//   4. done, seen    — finished and you've since focused that tab
 //
 // The tab label becomes "<opencode session title> <icon>". Config, presentation
 // helpers, the zellij CLI wrappers and the completion sound live in sibling modules; this
@@ -126,17 +125,6 @@ export const ZellijStatus: Plugin = async ({ $ }) => {
     await render()
   }
 
-  // A model/provider request failed and opencode is backing off + retrying. Not
-  // "needs you" — just surfaced so a stalled turn doesn't keep masquerading as
-  // busy while it waits between attempts.
-  async function setRetry() {
-    phase = "retry"
-    runStartedAt = undefined
-    endStopwatch()
-    stopPoll()
-    await render()
-  }
-
   // "done" covers finished turns and errors.
   async function setDone() {
     const wasDone = phase === "done"
@@ -197,22 +185,6 @@ export const ZellijStatus: Plugin = async ({ $ }) => {
           } else if (info.title && info.title !== title) {
             title = info.title
             await render()
-          }
-          break
-        }
-        case "session.status": {
-          // status is one of { type: "busy" | "idle" | "retry" }. "idle" is
-          // covered by the dedicated session.idle event below, so here we only
-          // act on retry (surface the backoff) and busy (resume from retry).
-          if (subagents.has(event.properties.sessionID)) break // subagent only
-          const status = event.properties.status
-          if (status.type === "retry") {
-            await setRetry()
-          } else if (status.type === "busy") {
-            // Resume once a retry succeeds — but never clobber an open
-            // permission prompt (❓) or one that's mid-flight.
-            if (phase === "retry") await setRunning()
-            else if (phase !== "permission" && pendingPerms.size === 0) await setRunning()
           }
           break
         }

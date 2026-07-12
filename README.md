@@ -7,12 +7,11 @@ When you run several [OpenCode](https://opencode.ai) sessions across
 one is still grinding, which is silently waiting for you to approve something,
 and which finished five minutes ago. So you keep clicking through them.
 
-## The five states
+## The four states
 
 | Icon | When | What it means for you |
 |------|------|-----------------------|
 | ⏳ | working | OpenCode is busy — ignore it for now |
-| 🔁 | retrying | a request failed; OpenCode is backing off and retrying — usually nothing to do |
 | ❓ | needs you | blocked on a permission prompt or a question — go unblock it |
 | 🔔 | done, unseen | it finished while you were away — go check the result |
 | ✅ | done, seen | finished, and you've already looked |

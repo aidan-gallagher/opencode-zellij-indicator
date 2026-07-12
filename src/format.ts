@@ -6,7 +6,6 @@
 import {
   ALL_ICONS,
   ICON_PERMISSION,
-  ICON_RETRY,
   ICON_RUNNING,
   ICON_SEEN,
   ICON_UNSEEN,
@@ -32,7 +31,6 @@ export function stripIcons(s: string): string {
 
 export function iconFor(phase: Phase, seen: boolean): string {
   if (phase === "running") return ICON_RUNNING
-  if (phase === "retry") return ICON_RETRY
   if (phase === "permission") return ICON_PERMISSION
   return seen ? ICON_SEEN : ICON_UNSEEN
 }
