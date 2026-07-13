@@ -1,19 +1,20 @@
 // ---------------------------------------------------------------------------
 // Sound notification when a background tab needs you while you're NOT looking
 // at it — either a turn finishes (🔔 "done, unseen") or it blocks on a
-// permission/question prompt (❓). Opt-in, off by default.
-//   OPENCODE_ZELLIJ_SOUND=1           enable
+// permission/question prompt (❓). On by default.
+//   OPENCODE_ZELLIJ_SOUND=0           disable
 //   OPENCODE_ZELLIJ_SOUND_CMD="..."   run this command instead of the built-in
 //                                     player (e.g. "pw-play ~/alert.wav")
 // When SOUND_CMD is unset we play the bundled WAV via the first audio player we
 // find. If no player exists we silently do nothing — audio is never guaranteed.
+// On by default; set OPENCODE_ZELLIJ_SOUND=0 to disable.
 // ---------------------------------------------------------------------------
 
 import { fileURLToPath } from "node:url"
 import { log } from "./config"
 import type { Shell } from "./zellij"
 
-const SOUND_ENABLED = process.env.OPENCODE_ZELLIJ_SOUND === "1"
+const SOUND_ENABLED = process.env.OPENCODE_ZELLIJ_SOUND !== "0"
 const SOUND_CMD = (() => {
   const v = process.env.OPENCODE_ZELLIJ_SOUND_CMD
   return v && v.length > 0 ? v : undefined

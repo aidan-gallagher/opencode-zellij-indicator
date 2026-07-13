@@ -26,7 +26,7 @@ export const ALL_ICONS = [
   ICON_SEEN,
 ].filter((i) => i.length)
 
-export const STOPWATCH_ENABLED = process.env.OPENCODE_ZELLIJ_STOPWATCH === "1"
+export const STOPWATCH_ENABLED = process.env.OPENCODE_ZELLIJ_STOPWATCH !== "0"
 
 const DEFAULT_POLL_MS = 1500
 const pollParsed = Number.parseInt(env("OPENCODE_ZELLIJ_POLL_MS", String(DEFAULT_POLL_MS)), 10)

@@ -5,7 +5,7 @@
 When you run several [OpenCode](https://opencode.ai) sessions across
 [Zellij](https://zellij.dev) tabs, they all look identical. You can't see which
 one is still grinding, which is silently waiting for you to approve something,
-and which finished five minutes ago. So you keep clicking through them.
+and which finished five minutes ago.
 
 ## The four states
 
@@ -16,13 +16,27 @@ and which finished five minutes ago. So you keep clicking through them.
 | 🔔 | done, unseen | it finished while you were away — go check the result |
 | ✅ | done, seen | finished, and you've already looked |
 
-## Example
+### Example
 
 ![OpenCode status icons on each Zellij tab](docs/tab-states.png)
 
 ## Naming
 
 OpenCode gives each session an auto-generated title, and the plugin uses that as the Zellij tab name. To change it, run OpenCode's built-in `/rename` slash command.
+
+## Stopwatch
+  
+Show how long a session has been running. After a minute, the elapsed minutes appear next to the icon:
+
+![Stopwatch on a running tab](docs/stopwatch.png)
+
+To disable the stopwatch set env variable `OPENCODE_ZELLIJ_STOPWATCH=0`.
+
+## Sound
+When a non-focused zellij tab finishes (🔔) or needs you (❓) an audio notification is played.
+
+To disable the sound set env variable `OPENCODE_ZELLIJ_SOUND=0`.  
+To override the default sound with your own set env variable `OPENCODE_ZELLIJ_SOUND_CMD="pw-play ~/alert.wav"`.
 
 ## Install
 
@@ -53,22 +67,3 @@ Prefer to let an agent do it? Copy this into your prompt:
 ```
 Fetch https://raw.githubusercontent.com/aidan-gallagher/opencode-zellij-indicator/master/docs/agent-setup.md and follow the setup steps.
 ```
-
-## Configuration
-
-Set these as [environment variables](https://askubuntu.com/questions/730/how-do-i-set-environment-variables) before launching OpenCode.
-
-### Stopwatch
-
-`OPENCODE_ZELLIJ_STOPWATCH=1`   
-Show how long a session has been running. After a minute, the elapsed minutes appear next to the icon:
-
-![Stopwatch on a running tab](docs/stopwatch.png)
-
-### Sound
-
-`OPENCODE_ZELLIJ_SOUND=1`   
-Play a sound when a background tab needs you — OpenCode either finishes (🔔) or hits a permission/question prompt (❓). Only sounds when the tab isn't focused.
-
-`OPENCODE_ZELLIJ_SOUND_CMD="pw-play ~/alert.wav"`  
-Override the default sound with your own command.

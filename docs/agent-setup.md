@@ -38,30 +38,32 @@ Outside Zellij the plugin does nothing (it exits immediately), so it's safe ever
 
 ## 4. Check for a colliding notification setup
 
-Do this **before** enabling the plugin's sound (step 5), so the user doesn't get double notifications when a session finishes:
+The plugin plays an attention sound **by default**, so check for a collision now — otherwise the user may get double notifications when a session finishes:
 
 - Look at the `plugin` array in `opencode.json` for any other
   notification/sound plugins.
 - Check `~/.config/opencode/tui.json` for OpenCode's built-in attention sound (the `attention.sound` / `attention.notifications` keys). Most users won't have a `tui.json` at all — that's fine.
 
-If something already plays a sound when a session needs attention, tell the user that turning on `OPENCODE_ZELLIJ_SOUND` would double up, and have them pick one (disable the other, or skip the plugin's sound).
+If something already plays a sound when a session needs attention, tell the user that the plugin's sound would double up, and have them pick one (disable the other, or disable the plugin's sound with `OPENCODE_ZELLIJ_SOUND=0` in step 5).
 
-## 5. Optional features — ask the user
+## 5. Default features — ask if they want to disable any
 
-Ask the user which of these they'd like (both are opt-in, off by default):
+The **stopwatch** and **attention sound** are both **on by default** — no env vars needed to enable them:
 
-- **Stopwatch** — `OPENCODE_ZELLIJ_STOPWATCH=1` — shows how long a session has been running next to the icon.
-- **Attention sound** — `OPENCODE_ZELLIJ_SOUND=1` — plays a sound when a background tab needs you: OpenCode finishes (🔔) or hits a permission/question prompt (❓). (Respect the collision check from step 4.)
+- **Stopwatch** — shows how long a session has been running next to the icon.
+- **Attention sound** — plays a sound when a background tab needs you: OpenCode finishes (🔔) or hits a permission/question prompt (❓).
 
-These are **environment variables**, so they need to go where the user's shell loads env vars. **Ask the user where they keep theirs** — e.g.
-`~/.bashrc`, `~/.zshrc`, `~/.config/fish/config.fish`, or `~/.profile` — then append only the variables they opted into to that file. For example:
+Ask the user whether they'd like to disable either (and disable the sound if the step 4 collision check found a conflict). To disable, set the relevant **environment variable** to `0` where the user's shell loads env vars. **Ask the user where they keep theirs** — e.g.
+`~/.bashrc`, `~/.zshrc`, `~/.config/fish/config.fish`, or `~/.profile` — then append only the opt-outs they chose to that file. For example:
 
 ```sh
-export OPENCODE_ZELLIJ_STOPWATCH=1
-export OPENCODE_ZELLIJ_SOUND=1
+export OPENCODE_ZELLIJ_STOPWATCH=0
+export OPENCODE_ZELLIJ_SOUND=0
 ```
 
-(Fish uses `set -gx OPENCODE_ZELLIJ_STOPWATCH 1` instead.)
+(Fish uses `set -gx OPENCODE_ZELLIJ_STOPWATCH 0` instead.)
+
+To override the default sound with a custom command instead of disabling it, set `OPENCODE_ZELLIJ_SOUND_CMD="pw-play ~/alert.wav"`.
 
 ## 6. Verify
 
@@ -70,7 +72,7 @@ Confirm:
 - `zellij --version` reports ≥ 0.44.0.
 - `opencode-zellij-indicator` is in the `plugin` array of
   `~/.config/opencode/opencode.json`.
-- Any env vars the user chose are written to their shell config.
-- There's no unresolved sound collision.
+- Any opt-out env vars the user chose are written to their shell config.
+- There's no unresolved sound collision (if there was one, the plugin's sound is disabled with `OPENCODE_ZELLIJ_SOUND=0`).
 
 Then tell the user to try it: open a fresh shell (so the env vars load), run `zellij`, then run `opencode` inside it, and send their first prompt - a status icon should appear on the tab.
