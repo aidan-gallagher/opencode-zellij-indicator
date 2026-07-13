@@ -51,7 +51,7 @@ If something already plays a sound when a session needs attention, tell the user
 Ask the user which of these they'd like (both are opt-in, off by default):
 
 - **Stopwatch** — `OPENCODE_ZELLIJ_STOPWATCH=1` — shows how long a session has been running next to the icon.
-- **Finish sound** — `OPENCODE_ZELLIJ_SOUND=1` — plays a sound when OpenCode finishes in a background tab. (Respect the collision check from step 4.)
+- **Attention sound** — `OPENCODE_ZELLIJ_SOUND=1` — plays a sound when a background tab needs you: OpenCode finishes (🔔) or hits a permission/question prompt (❓). (Respect the collision check from step 4.)
 
 These are **environment variables**, so they need to go where the user's shell loads env vars. **Ask the user where they keep theirs** — e.g.
 `~/.bashrc`, `~/.zshrc`, `~/.config/fish/config.fish`, or `~/.profile` — then append only the variables they opted into to that file. For example:

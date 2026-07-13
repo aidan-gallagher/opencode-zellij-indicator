@@ -141,14 +141,19 @@ export const ZellijStatus: Plugin = async ({ $ }) => {
     }
   }
 
-  // Waiting on a permission prompt — always stands out, regardless of focus.
+  // Waiting on a permission prompt or question — always stands out, regardless
+  // of focus. Being blocked on a prompt is also a "come back" moment, so alert
+  // once on the transition (repeated setPermission calls for the same prompt
+  // won't replay) and only when you're not already looking — same as the done beep.
   async function setPermission() {
+    const wasPermission = phase === "permission"
     phase = "permission"
     runStartedAt = undefined
     endStopwatch()
     seen = false
     stopPoll()
     await render()
+    if (!wasPermission && !(await isFocused($, paneId))) void playSound($)
   }
 
   return {

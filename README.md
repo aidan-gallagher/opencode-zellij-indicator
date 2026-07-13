@@ -68,7 +68,7 @@ Show how long a session has been running. After a minute, the elapsed minutes ap
 ### Sound
 
 `OPENCODE_ZELLIJ_SOUND=1`   
-Play a sound when OpenCode finishes in a background tab.
+Play a sound when a background tab needs you — OpenCode either finishes (🔔) or hits a permission/question prompt (❓). Only sounds when the tab isn't focused.
 
 `OPENCODE_ZELLIJ_SOUND_CMD="pw-play ~/alert.wav"`  
 Override the default sound with your own command.

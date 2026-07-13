@@ -1,6 +1,7 @@
 // ---------------------------------------------------------------------------
-// Sound notification when a turn finishes while you're NOT looking at its tab
-// (the 🔔 "done, unseen" state). Opt-in, off by default.
+// Sound notification when a background tab needs you while you're NOT looking
+// at it — either a turn finishes (🔔 "done, unseen") or it blocks on a
+// permission/question prompt (❓). Opt-in, off by default.
 //   OPENCODE_ZELLIJ_SOUND=1           enable
 //   OPENCODE_ZELLIJ_SOUND_CMD="..."   run this command instead of the built-in
 //                                     player (e.g. "pw-play ~/alert.wav")
