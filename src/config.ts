@@ -30,13 +30,7 @@ export const STOPWATCH_ENABLED = process.env.OPENCODE_ZELLIJ_STOPWATCH !== "0"
 
 const DEFAULT_POLL_MS = 1500
 const pollParsed = Number.parseInt(env("OPENCODE_ZELLIJ_POLL_MS", String(DEFAULT_POLL_MS)), 10)
-export const POLL_MS = Number.isFinite(pollParsed) ? pollParsed : DEFAULT_POLL_MS
-
-// Tools that block waiting for the user (opencode's interactive question / the
-// plan-mode "switch to build agent?" prompt). While one of these runs, the
-// session is really waiting on you, so show the permission icon rather than the
-// running one.
-export const ASK_TOOLS = new Set(["question", "plan_exit"])
+export const POLL_MS = Number.isFinite(pollParsed) && pollParsed >= 100 ? pollParsed : DEFAULT_POLL_MS
 
 // Debug logging (set OPENCODE_ZELLIJ_DEBUG=1). Goes to opencode's server log,
 // not the TUI. Invaluable for diagnosing "why isn't my tab renaming?".

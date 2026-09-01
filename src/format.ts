@@ -16,6 +16,8 @@ import {
 // Strip any trailing status icon(s) so we recover the clean base tab name.
 export function stripIcons(s: string): string {
   let out = s.trimEnd()
+  const withoutStopwatch = out.replace(/\s+\(⏱ [^)]+\)$/, "").trimEnd()
+  if (ALL_ICONS.some((icon) => withoutStopwatch.endsWith(icon))) out = withoutStopwatch
   let changed = true
   while (changed) {
     changed = false
@@ -37,9 +39,9 @@ export function iconFor(phase: Phase, seen: boolean): string {
 
 // Returns compact stopwatch string once >= 1 min, or undefined if not yet / not
 // applicable (feature disabled, not running, or no start time).
-export function formatStopwatch(runStartedAt: number | undefined, phase: Phase): string | undefined {
+export function formatStopwatch(runStartedAt: number | undefined, phase: Phase, now = Date.now()): string | undefined {
   if (!STOPWATCH_ENABLED || !runStartedAt || phase !== "running") return undefined
-  const mins = Math.floor((Date.now() - runStartedAt) / 60_000)
+  const mins = Math.floor((now - runStartedAt) / 60_000)
   if (mins < 1) return undefined
   if (mins < 60) return `${mins}`
   const h = Math.floor(mins / 60)

@@ -1,20 +1,23 @@
 {
   "name": "opencode-zellij-indicator",
-  "version": "0.7.0",
-  "description": "Show each opencode session's status (running / needs-you / done-unseen / done-seen) and title on its Zellij tab",
+  "version": "2.0.0-beta.0",
+  "description": "Show the selected OpenCode 2 session's status and title on its Zellij tab",
   "type": "module",
-  "main": "src/index.ts",
+  "exports": {
+    "./tui": "./src/index.ts"
+  },
   "files": [
     "src",
-    "sounds",
     "README.md"
   ],
   "scripts": {
+    "test": "bun test",
     "typecheck": "tsc --noEmit"
   },
   "keywords": [
     "opencode",
     "opencode-plugin",
+    "opencode2",
     "zellij",
     "terminal",
     "tab",
@@ -30,8 +33,11 @@
   "bugs": {
     "url": "https://github.com/aidan-gallagher/opencode-zellij-indicator/issues"
   },
+  "dependencies": {
+    "@opencode-ai/plugin": "0.0.0-beta-18414",
+    "solid-js": "1.9.10"
+  },
   "devDependencies": {
-    "@opencode-ai/plugin": "1.4.8",
     "@types/node": "^22",
     "typescript": "^5"
   }
