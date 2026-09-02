@@ -104,3 +104,9 @@ opencode2   # run this inside Zellij
 That single tab now shows OpenCode's status. To feel the point of the plugin,
 open more tabs and run OpenCode in each — press `Ctrl t` then `n` for a new
 tab (`Ctrl t` then the arrow keys to switch between them).
+
+## Versioning
+
+OpenCode v2 introduced a breaking plugin API. The main branch only supports OpenCode v2, for OpenCode v1 please use v0.7.0
+
+The v1 plugin ran inside the OpenCode server. The v2 plugin runs inside each TUI client instead.
