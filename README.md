@@ -43,11 +43,11 @@ To override the default sound with your own set env variable `OPENCODE_ZELLIJ_SO
 **1. Install Zellij and OpenCode.**  
 Requires Zellij ≥ 0.44.0
 
-**2. Enable the plugin.**   
-Add the following to your `opencode.json`
+**2. Enable the OpenCode v1 plugin.**
+Add the following to your `opencode.json`. The version must be pinned because the latest release targets OpenCode v2.
 ```json
 {
-  "plugin": ["opencode-zellij-indicator"]
+  "plugin": ["opencode-zellij-indicator@0.7.0"]
 }
 ```
 Outside Zellij the plugin does nothing (it exits immediately), so it's safe to leave enabled everywhere at no cost.
