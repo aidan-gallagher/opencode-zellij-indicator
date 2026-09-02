@@ -49,7 +49,7 @@ Requires OpenCode 2 beta 18414 or newer and Zellij ≥ 0.44.0
 **2. Enable the plugin.**
 
 ```sh
-opencode2 plugin add opencode-zellij-indicator@beta
+opencode2 plugin add opencode-zellij-indicator
 ```
 
 **3. Disable OpenCode's built-in notifications.**
@@ -60,7 +60,7 @@ To prevent duplicate sounds, update the `plugins` list in `~/.config/opencode/cl
 {
   "plugins": [
     "-opencode.notifications",
-    "opencode-zellij-indicator@beta"
+    "opencode-zellij-indicator"
   ]
 }
 ```
