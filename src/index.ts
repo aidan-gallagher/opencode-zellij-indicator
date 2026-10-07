@@ -227,7 +227,7 @@ export default Plugin.define({
 
     const restorePendingTabs = async () => {
       for (const [restoreTabID, restore] of pendingRestores) {
-        const result = await renameTabIfNamed(restoreTabID, restore.expected, restore.base)
+        const result = await renameTabIfNamed(restoreTabID, restore.expected, restore.base, paneId)
         if (result !== "failed") pendingRestores.delete(restoreTabID)
       }
     }
@@ -244,6 +244,7 @@ export default Plugin.define({
         name = labelFor(selection)
       }
       await restorePendingTabs()
+      if (!pane.owner) return
       if (name === pane.tabName) {
         lastName = name
         return

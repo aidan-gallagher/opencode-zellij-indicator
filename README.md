@@ -29,6 +29,10 @@ The plugin follows the session selected in each client and uses its title and st
 
 OpenCode gives each session an auto-generated title, and the plugin uses that as the Zellij tab name. To change it, run OpenCode's built-in `/rename` slash command.
 
+## Split panes
+
+If a Zellij tab has several OpenCode panes, the tab shows the focused OpenCode pane (or the oldest one while a non-OpenCode pane is focused). The other panes leave the tab name alone but still play their sounds.
+
 ## Stopwatch
 
 Show how long a session has been running. After a minute, the elapsed minutes appear next to the icon:

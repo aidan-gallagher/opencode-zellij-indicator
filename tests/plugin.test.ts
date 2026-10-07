@@ -5,7 +5,8 @@ const tabs = new Map<number, string>()
 let currentTab = 0
 let restoreFailures = 0
 let paneFocused: boolean | undefined = false
-const resolvePane = mock(async () => ({ tabId: currentTab, tabName: tabs.get(currentTab) ?? "" }))
+let paneOwner = true
+const resolvePane = mock(async () => ({ tabId: currentTab, tabName: tabs.get(currentTab) ?? "", owner: paneOwner }))
 const renameTab = mock(async (id: number, name: string) => {
   tabs.set(id, name)
   return true
@@ -177,6 +178,56 @@ test("preserves a new child's fast completion and follows a moved pane", async (
     await cleanup?.()
     expect(tabs.get(1)).toBe("other")
   } finally {
+    if (previousSession === undefined) delete process.env.ZELLIJ_SESSION_NAME
+    else process.env.ZELLIJ_SESSION_NAME = previousSession
+    if (previousPane === undefined) delete process.env.ZELLIJ_PANE_ID
+    else process.env.ZELLIJ_PANE_ID = previousPane
+  }
+})
+
+test("leaves the tab alone when another OpenCode pane owns it", async () => {
+  const previousSession = process.env.ZELLIJ_SESSION_NAME
+  const previousPane = process.env.ZELLIJ_PANE_ID
+  process.env.ZELLIJ_SESSION_NAME = "test"
+  process.env.ZELLIJ_PANE_ID = "8"
+
+  tabs.clear()
+  tabs.set(0, `Other ${ICON_SEEN}`)
+  currentTab = 0
+  restoreFailures = 0
+  paneFocused = false
+  paneOwner = false
+  const session = { id: "mine", title: "Mine", location: { directory: "/tmp" } }
+  const context = {
+    attention: { notify: async () => ({ ok: true, notification: false, sound: true }) },
+    client: { session: { list: async () => ({ data: [], cursor: {} }) } },
+    data: {
+      listen: () => () => {},
+      session: {
+        family: () => ["mine"],
+        form: { list: () => [], sync: async () => undefined },
+        get: () => session,
+        pending: { list: () => [], sync: async () => undefined },
+        permission: { list: () => [], sync: async () => undefined },
+        root: () => "mine",
+        status: () => "idle" as const,
+        sync: async () => undefined,
+      },
+    },
+    ui: { router: { current: () => ({ type: "session", sessionID: "mine" }) } },
+  }
+
+  try {
+    const cleanup = await plugin.setup(context as never)
+    expect(tabs.get(0)).toBe(`Other ${ICON_SEEN}`)
+
+    paneOwner = true
+    await cleanup?.()
+    const again = await plugin.setup(context as never)
+    expect(tabs.get(0)).toBe(`Mine ${ICON_SEEN}`)
+    await again?.()
+  } finally {
+    paneOwner = true
     if (previousSession === undefined) delete process.env.ZELLIJ_SESSION_NAME
     else process.env.ZELLIJ_SESSION_NAME = previousSession
     if (previousPane === undefined) delete process.env.ZELLIJ_PANE_ID
