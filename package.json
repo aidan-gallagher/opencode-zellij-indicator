@@ -12,6 +12,7 @@
   ],
   "scripts": {
     "test": "bun test",
+    "e2e": "bun scripts/e2e.ts",
     "typecheck": "tsc --noEmit"
   },
   "keywords": [

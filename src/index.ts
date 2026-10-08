@@ -1,8 +1,9 @@
 import { Plugin } from "@opencode-ai/plugin/tui"
-import { POLL_MS, STOPWATCH_ENABLED, log } from "./config"
-import { formatStopwatch, iconFor, stripIcons } from "./format"
+import { MAX_TAB_LENGTH, POLL_MS, STOPWATCH_ENABLED, log } from "./config"
+import { formatStopwatch, formatTabName, iconFor, stripIcons, type Label } from "./format"
+import { openRegistry, type TabState } from "./registry"
 import { derivePhase, shouldCheckFocus, transitionSession, type SessionState } from "./state"
-import { isFocused, renameTab, renameTabIfNamed, resolvePane } from "./zellij"
+import { isFocused, listClientPanes, listPanes, renameTab, type ZellijPane } from "./zellij"
 
 type Selection = {
   rootID: string
@@ -20,16 +21,21 @@ export default Plugin.define({
       return
     }
 
-    const initialPane = await resolvePane(paneId)
+    const initialPane = (await listPanes())?.find((pane) => pane.id === paneId)
     if (!initialPane) {
       log(`could not resolve Zellij pane ${paneId} - disabled`)
       return
     }
 
     log(`init: pane=${paneId} session=${process.env.ZELLIJ_SESSION_NAME}`)
+    const registry = await openRegistry(process.env.ZELLIJ_SESSION_NAME, paneId)
     let tabId = initialPane.tabId
-    let baseName = stripIcons(initialPane.tabName)
-    let lastName = initialPane.tabName
+    let ownLabel: Label | null = null
+    const pendingLeaves = new Set<number>()
+    // Tab state this client last wrote, kept in memory in case the shared file
+    // can't be written; and tabs it has already rendered as writer.
+    const lastState = new Map<number, TabState>()
+    const visited = new Set<number>()
     let activeSession: string | undefined
     let disposed = false
     let pollTimer: ReturnType<typeof setInterval> | undefined
@@ -41,34 +47,48 @@ export default Plugin.define({
     const rootHints = new Map<string, string>()
     const executionStarts = new Map<string, number>()
     const pendingAttention = new Map<string, { phase: "permission" | "done"; title?: string }>()
-    const pendingRestores = new Map<number, { expected: string; base: string }>()
     let activeRoot: string | undefined
     let activeFamily = new Set<string>()
     let work: Promise<void> = Promise.resolve()
     let refreshRequested = false
     let forceSyncRequested = false
     let refreshScheduled = false
+    let tabRenderRequested = false
     let refresh: (forceSync?: boolean) => Promise<void>
+    let renderTab: () => Promise<void>
 
-    const requestRefresh = (forceSync = false) => {
-      refreshRequested = true
-      forceSyncRequested ||= forceSync
+    const schedule = () => {
       if (refreshScheduled || disposed) return
       refreshScheduled = true
       work = work
         .then(async () => {
-          while (refreshRequested && !disposed) {
-            refreshRequested = false
-            const force = forceSyncRequested
-            forceSyncRequested = false
-            await refresh(force)
+          while ((refreshRequested || tabRenderRequested) && !disposed) {
+            if (refreshRequested) {
+              refreshRequested = false
+              const force = forceSyncRequested
+              forceSyncRequested = false
+              await refresh(force)
+            }
+            if (tabRenderRequested && !disposed) await renderTab()
           }
         })
         .catch((error) => log(`update failed: ${error instanceof Error ? error.message : String(error)}`))
         .finally(() => {
           refreshScheduled = false
-          if (refreshRequested && !disposed) requestRefresh()
+          if ((refreshRequested || tabRenderRequested) && !disposed) schedule()
         })
+    }
+
+    const requestRefresh = (forceSync = false) => {
+      refreshRequested = true
+      forceSyncRequested ||= forceSync
+      schedule()
+    }
+
+    // Another client in this Zellij session changed, so re-check our tab.
+    const requestTabRender = () => {
+      tabRenderRequested = true
+      schedule()
     }
 
     const familyIDs = (rootID: string) => {
@@ -216,45 +236,101 @@ export default Plugin.define({
         })),
       )
 
-    const labelFor = (selection: Selection | undefined) => {
-      if (!selection) return baseName
-      const label = selection.title?.trim() || baseName.trim()
-      const stopwatch = formatStopwatch(selection.state.runStartedAt, selection.state.phase)
-      const icon = iconFor(selection.state.phase, selection.state.seen)
-      if (!label) return stopwatch ? `${icon} (⏱ ${stopwatch})` : icon
-      return stopwatch ? `${label} ${icon} (⏱ ${stopwatch})` : `${label} ${icon}`
+    const labelOf = (selection: Selection): Label => ({
+      title: selection.title?.trim() ?? "",
+      icon: iconFor(selection.state.phase, selection.state.seen),
+      stopwatch: formatStopwatch(selection.state.runStartedAt, selection.state.phase),
+    })
+
+    const tabMembers = (panes: ZellijPane[], id: number) =>
+      registry.members(panes.filter((pane) => pane.tabId === id).map((pane) => pane.id))
+
+    // Prefer what we wrote ourselves while the tab still shows it; otherwise
+    // the shared state (another client may have been the writer since).
+    const knownState = async (id: number, current: string | undefined) => {
+      const memory = lastState.get(id)
+      if (memory && memory.written === current) return memory
+      return (await registry.readTab(id)) ?? memory
     }
 
-    const restorePendingTabs = async () => {
-      for (const [restoreTabID, restore] of pendingRestores) {
-        const result = await renameTabIfNamed(restoreTabID, restore.expected, restore.base, paneId)
-        if (result !== "failed") pendingRestores.delete(restoreTabID)
+    const saveState = async (id: number, state: TabState) => {
+      lastState.set(id, { ...state })
+      await registry.writeTab(id, state)
+    }
+
+    // The last OpenCode pane to leave a tab restores its original name, unless
+    // something else renamed the tab in the meantime.
+    const leaveTab = async (id: number, panes: ZellijPane[]) => {
+      const others = (await tabMembers(panes, id)).filter((member) => member.paneId !== paneId)
+      if (others.length === 0) {
+        const current = panes.find((pane) => pane.tabId === id)?.tabName
+        const state = await knownState(id, current)
+        if (state && current === state.written && current !== state.base) {
+          log(`restore tab ${id} -> ${JSON.stringify(state.base)}`)
+          if (!(await renameTab(id, state.base))) return
+        }
+        await registry.removeTab(id)
+      }
+      lastState.delete(id)
+      visited.delete(id)
+      pendingLeaves.delete(id)
+    }
+
+    // Only the tab's writer (its live OpenCode pane with the lowest id) renames
+    // it, so clients sharing a tab never fight over the name.
+    renderTab = async () => {
+      tabRenderRequested = false
+      const panes = await listPanes()
+      if (!panes) return
+      const mine = panes.find((pane) => pane.id === paneId)
+      if (!mine) return
+      if (mine.tabId !== tabId) {
+        pendingLeaves.add(tabId)
+        tabId = mine.tabId
+      }
+      await registry.publish(ownLabel, tabId)
+      for (const id of [...pendingLeaves]) await leaveTab(id, panes)
+
+      const members = await tabMembers(panes, tabId)
+      if (Math.min(...members.map((member) => member.paneId)) !== paneId) return
+
+      const current = mine.tabName
+      const saved = await knownState(tabId, current)
+      // The original name is taken from the tab when no state exists yet. A
+      // client joining a tab alone also starts afresh if the leftover state
+      // doesn't match (its last client crashed, then the tab was renamed).
+      // Later mismatches are concurrent updates and keep the original name.
+      const fresh = !saved || (!visited.has(tabId) && members.length === 1 && saved.written !== current)
+      visited.add(tabId)
+      const state: TabState = fresh ? { base: stripIcons(current), primary: saved?.primary ?? null, written: current } : { ...saved }
+      const labelled = members
+        .flatMap((member) => (member.label ? [{ paneId: member.paneId, label: member.label }] : []))
+        .sort((a, b) => a.paneId - b.paneId)
+      // The last focused OpenCode pane is kept while it's on its home screen.
+      if (labelled.length > 1) {
+        const focused = (await listClientPanes()) ?? []
+        const focusedPane = labelled.find((entry) => focused.includes(entry.paneId))?.paneId
+        if (focusedPane !== undefined) state.primary = focusedPane
+      }
+      const primary = labelled.find((entry) => entry.paneId === state.primary)?.paneId ?? labelled[0]?.paneId
+      const name = labelled.length > 0 ? formatTabName(labelled, primary, state.base, MAX_TAB_LENGTH) : state.base
+      // Record the name before renaming, so any client that sees the new tab
+      // name also sees the state that goes with it.
+      state.written = name
+      if (!saved || saved.base !== state.base || saved.primary !== state.primary || saved.written !== state.written) {
+        await saveState(tabId, state)
+      }
+      if (name !== current) {
+        log(`rename tab ${tabId} -> ${JSON.stringify(name)}`)
+        if (!(await renameTab(tabId, name))) await saveState(tabId, { ...state, written: current })
       }
     }
 
     const render = async (selection: Selection | undefined, routeSessionID?: string) => {
-      let name = labelFor(selection)
-      const pane = await resolvePane(paneId)
-      if (!pane) return
-      if (pane.tabId !== tabId) {
-        if (lastName !== baseName) pendingRestores.set(tabId, { expected: lastName, base: baseName })
-        tabId = pane.tabId
-        baseName = stripIcons(pane.tabName)
-        lastName = pane.tabName
-        name = labelFor(selection)
-      }
-      await restorePendingTabs()
-      if (!pane.owner) return
-      if (name === pane.tabName) {
-        lastName = name
-        return
-      }
-
       const route = context.ui.router.current()
       if (routeSessionID ? route.type !== "session" || route.sessionID !== routeSessionID : route.type === "session") return
-
-      log(`rename tab ${tabId} -> ${JSON.stringify(name)}`)
-      if (await renameTab(tabId, name)) lastName = name
+      ownLabel = selection ? labelOf(selection) : null
+      await renderTab()
     }
 
     const clearStopwatch = () => {
@@ -370,18 +446,26 @@ export default Plugin.define({
     }
 
     await refresh(true).catch((error) => log(`initial update failed: ${error instanceof Error ? error.message : String(error)}`))
-    pollTimer = setInterval(() => requestRefresh(), POLL_MS)
+    pollTimer = setInterval(() => {
+      requestRefresh()
+      requestTabRender()
+    }, POLL_MS)
     pollTimer.unref?.()
+    const stopWatch = registry.watch(requestTabRender)
 
     return async () => {
       disposed = true
       stopEvents()
+      stopWatch()
       if (pollTimer) clearInterval(pollTimer)
       clearStopwatch()
       await work
 
-      if (lastName !== baseName) pendingRestores.set(tabId, { expected: lastName, base: baseName })
-      await restorePendingTabs()
+      await registry.close()
+      const panes = await listPanes()
+      if (!panes) return
+      pendingLeaves.add(tabId)
+      for (const id of [...pendingLeaves]) await leaveTab(id, panes)
     }
   },
 })

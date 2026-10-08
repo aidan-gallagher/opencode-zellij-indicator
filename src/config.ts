@@ -28,6 +28,13 @@ export const ALL_ICONS = [
 
 export const STOPWATCH_ENABLED = process.env.OPENCODE_ZELLIJ_STOPWATCH !== "0"
 
+// When several OpenCode panes share a tab, their labels are joined if the
+// result fits in this many characters; otherwise the tab shows the last focused
+// session plus the other panes' icons.
+const DEFAULT_MAX_TAB_LENGTH = 60
+const maxParsed = Number.parseInt(env("OPENCODE_ZELLIJ_MAX_TAB_LENGTH", String(DEFAULT_MAX_TAB_LENGTH)), 10)
+export const MAX_TAB_LENGTH = Number.isFinite(maxParsed) && maxParsed > 0 ? maxParsed : DEFAULT_MAX_TAB_LENGTH
+
 const DEFAULT_POLL_MS = 1500
 const pollParsed = Number.parseInt(env("OPENCODE_ZELLIJ_POLL_MS", String(DEFAULT_POLL_MS)), 10)
 export const POLL_MS = Number.isFinite(pollParsed) && pollParsed >= 100 ? pollParsed : DEFAULT_POLL_MS

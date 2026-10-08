@@ -1,38 +1,35 @@
-import { describe, expect, test } from "bun:test"
-import { isOpenCodePane, tabOwner, type Pane } from "../src/zellij"
+import { expect, mock, test } from "bun:test"
 
-const pane = (id: number, extra: Partial<Pane> = {}): Pane => ({ id, is_plugin: false, tab_id: 1, ...extra })
+const calls: string[][] = []
+let stdout = ""
+mock.module("../src/process", () => ({
+  runCommand: async (command: string, args: string[]) => {
+    calls.push([command, ...args])
+    return { exitCode: 0, stdout }
+  },
+}))
 
-describe("isOpenCodePane", () => {
-  test("detects OpenCode by command or title", () => {
-    expect(isOpenCodePane(pane(1, { pane_command: "/home/me/.opencode/bin/opencode -c" }))).toBe(true)
-    expect(isOpenCodePane(pane(1, { title: "OC | Fix login" }))).toBe(true)
-    expect(isOpenCodePane(pane(1, { pane_command: "/bin/bash", title: "~/Code" }))).toBe(false)
-    expect(isOpenCodePane(pane(1, { pane_command: "opencode", exited: true }))).toBe(false)
-    expect(isOpenCodePane(pane(1, { title: "OC | x", is_plugin: true }))).toBe(false)
-  })
+// Import the real module under a distinct specifier: other test files replace
+// "../src/zellij" itself with a mock.
+const zellij = await import(`../src/zellij.ts?real`)
+
+test("reads which panes clients are focused on", async () => {
+  stdout = "CLIENT_ID ZELLIJ_PANE_ID RUNNING_COMMAND\n1         terminal_4     N/A\n2         plugin_3       N/A\n3         terminal_12    vim\n"
+  expect(await zellij.listClientPanes()).toEqual([4, 12])
+  expect(await zellij.isFocused(12)).toBe(true)
+  expect(await zellij.isFocused(1)).toBe(false)
 })
 
-describe("tabOwner", () => {
-  const oc = { pane_command: "opencode" }
+test("lists live terminal panes", async () => {
+  stdout = JSON.stringify([
+    { id: 0, is_plugin: true, tab_id: 0, tab_name: "a" },
+    { id: 1, is_plugin: false, tab_id: 0, tab_name: "a" },
+    { id: 2, is_plugin: false, exited: true, tab_id: 1, tab_name: "b" },
+  ])
+  expect(await zellij.listPanes()).toEqual([{ id: 1, tabId: 0, tabName: "a" }])
+})
 
-  test("a lone OpenCode pane owns its tab even next to a focused shell", () => {
-    expect(tabOwner([pane(1, { is_focused: true, pane_command: "bash" }), pane(2, oc)], 1, 2)).toBe(2)
-  })
-
-  test("the focused OpenCode pane owns a shared tab", () => {
-    const panes = [pane(1, oc), pane(2, { ...oc, is_focused: true })]
-    expect(tabOwner(panes, 1, 1)).toBe(2)
-    expect(tabOwner(panes, 1, 2)).toBe(2)
-  })
-
-  test("the oldest OpenCode pane owns it when a shell is focused", () => {
-    const panes = [pane(5, { is_focused: true, pane_command: "bash" }), pane(3, oc), pane(4, oc)]
-    expect(tabOwner(panes, 1, 3)).toBe(3)
-    expect(tabOwner(panes, 1, 4)).toBe(3)
-  })
-
-  test("ignores OpenCode panes in other tabs", () => {
-    expect(tabOwner([pane(1, { ...oc, tab_id: 2, is_focused: true }), pane(2, oc)], 1, 2)).toBe(2)
-  })
+test("passes tab names after --", async () => {
+  await zellij.renameTab(3, "-v flag regression")
+  expect(calls.at(-1)).toEqual(["zellij", "action", "rename-tab-by-id", "3", "--", "-v flag regression"])
 })

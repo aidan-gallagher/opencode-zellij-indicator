@@ -31,7 +31,7 @@ OpenCode gives each session an auto-generated title, and the plugin uses that as
 
 ## Split panes
 
-If a Zellij tab has several OpenCode panes, the tab shows the focused OpenCode pane (or the oldest one while a non-OpenCode pane is focused). The other panes leave the tab name alone but still play their sounds.
+If a Zellij tab has several OpenCode panes, the tab shows all of them when they fit, e.g. `Fix login ⏳ │ Write tests ✅`. When that would be longer than 60 characters (change with `OPENCODE_ZELLIJ_MAX_TAB_LENGTH`), it shows the OpenCode pane you focused last plus the other panes' icons, e.g. `Fix login ⏳ +✅🔔`. Focusing a shell or editor in the same tab keeps the last OpenCode session.
 
 ## Stopwatch
 
