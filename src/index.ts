@@ -3,7 +3,7 @@ import { MAX_TAB_LENGTH, POLL_MS, STOPWATCH_ENABLED, log } from "./config"
 import { formatStopwatch, formatTabName, iconFor, stripIcons, type Label } from "./format"
 import { openRegistry, type TabState } from "./registry"
 import { derivePhase, shouldCheckFocus, transitionSession, type SessionState } from "./state"
-import { isFocused, listClientPanes, listPanes, renameTab, type ZellijPane } from "./zellij"
+import { isFocused, listClientPanes, listPanes, openPane, renameTab, type ZellijPane } from "./zellij"
 
 type Selection = {
   rootID: string
@@ -28,6 +28,44 @@ export default Plugin.define({
     }
 
     log(`init: pane=${paneId} session=${process.env.ZELLIJ_SESSION_NAME}`)
+
+    const forkToPane = async () => {
+      const route = context.ui.router.current()
+      if (route.type !== "session") {
+        context.ui.toast.show({ message: "Open a session to fork it", variant: "warning" })
+        return
+      }
+      try {
+        // The fork input changed between OpenCode releases; omitting the
+        // boundary copies the whole session.
+        const fork = await context.client.session.fork({ sessionID: route.sessionID } as never)
+        const directory = fork.location?.directory ?? context.data.session.get(route.sessionID)?.location?.directory
+        // Connect the new client to the same server as this one.
+        const serverIndex = process.argv.indexOf("--server")
+        const server = serverIndex >= 0 && process.argv[serverIndex + 1] ? ["--server", process.argv[serverIndex + 1]] : []
+        if (!(await openPane(directory, [process.execPath, ...server, "--session", fork.id]))) {
+          context.ui.toast.show({ message: "Forked, but could not open a Zellij pane", variant: "error" })
+        }
+      } catch (error) {
+        context.ui.toast.show({ message: `Fork failed: ${error instanceof Error ? error.message : String(error)}`, variant: "error" })
+      }
+    }
+
+    context.keymap.layer(() => ({
+      mode: "global",
+      commands: [
+        {
+          id: "zellij.fork",
+          title: "Fork session into a new Zellij pane",
+          group: "Session",
+          palette: true,
+          slash: { name: "zfork" },
+          enabled: () => context.ui.router.current().type === "session",
+          run: forkToPane,
+        },
+      ],
+      bindings: ["zellij.fork"],
+    }))
     const registry = await openRegistry(process.env.ZELLIJ_SESSION_NAME, paneId)
     let tabId = initialPane.tabId
     let ownLabel: Label | null = null

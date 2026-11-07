@@ -6,8 +6,9 @@
 // Needs zellij, opencode2 (or OPENCODE_BIN) and script(1); Linux only (reads
 // /proc to crash a client). Run with `bun run e2e`.
 
-import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs"
-import { tmpdir } from "node:os"
+import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs"
+import { homedir, tmpdir } from "node:os"
+import { Database } from "bun:sqlite"
 import { join, resolve } from "node:path"
 
 const REPO = resolve(import.meta.dir, "..")
@@ -164,6 +165,47 @@ async function expectTab(label: string, tabId: number, expected: string, { withi
   pass(label)
 }
 
+// The private server has its own config and data, so without this it has no
+// credentials and falls back to OpenCode Zen for title generation and runs.
+// Copy the real login and default model instead (the temp dir is deleted
+// afterwards).
+function useRealCredentials() {
+  const realData = join(process.env.XDG_DATA_HOME ?? join(homedir(), ".local/share"), "opencode")
+  const realConfig = join(process.env.XDG_CONFIG_HOME ?? join(homedir(), ".config"), "opencode")
+  const data = join(root, "data/opencode")
+  mkdirSync(data, { recursive: true, mode: 0o700 })
+  for (const file of ["auth.json", "account.json"]) {
+    if (!existsSync(join(realData, file))) continue
+    copyFileSync(join(realData, file), join(data, file))
+    chmodSync(join(data, file), 0o600)
+  }
+  const model = ["opencode.jsonc", "opencode.json"]
+    .map((file) => join(realConfig, file))
+    .filter((file) => existsSync(file))
+    .map((file) => readFileSync(file, "utf8").match(/^\s*"model"\s*:\s*"([^"]+)"/m)?.[1])
+    .find(Boolean)
+  if (!model) throw new Error(`no default model in ${realConfig}/opencode.json`)
+  writeFileSync(join(root, "config/opencode/opencode.json"), JSON.stringify({ model }))
+}
+
+// OpenCode 2 keeps credentials in its database, so copy the active ones
+// (e.g. the Cloudflare login) from the real database into the private server.
+async function seedCredentials() {
+  const realDb = (await run([OPENCODE, "debug", "paths", "db"])).stdout.trim()
+  const db = new Database(realDb, { readonly: true })
+  const rows = db
+    .query("select integration_id as integrationID, label, value from credential where active = 1 and integration_id not like 'mcp_%'")
+    .all() as { integrationID: string; label: string; value: string }[]
+  db.close()
+  if (rows.length === 0) throw new Error(`no active OpenCode credentials in ${realDb}; log in first`)
+  for (const row of rows) {
+    // Wellknown integrations (like https://opencode.cloudflare.dev) must be
+    // registered before they can hold a credential.
+    if (/^https?:\/\//.test(row.integrationID)) await api("POST", "/api/experimental/integration/wellknown", { url: row.integrationID })
+    await api("POST", "/api/credential", { integrationID: row.integrationID, label: row.label, value: JSON.parse(row.value), activate: true })
+  }
+}
+
 let serverProc: ReturnType<typeof Bun.spawn> | undefined
 let clientProc: ReturnType<typeof Bun.spawn> | undefined
 
@@ -174,6 +216,7 @@ async function setup() {
     JSON.stringify({ plugins: ["-opencode.notifications"], tabs: { enabled: false }, animations: false, attention: { enabled: false } }),
   )
   writeFileSync(join(root, "config/opencode/plugins/zellij-indicator/tui.ts"), `export { default } from ${JSON.stringify(PLUGIN)}\n`)
+  useRealCredentials()
   writeFileSync(join(root, "env.sh"), Object.entries(opencodeEnv).map(([key, value]) => `export ${key}=${value}`).join("\n") + "\n")
 
   serverProc = Bun.spawn([OPENCODE, "serve", "--hostname", "127.0.0.1", "--port", String(port)], {
@@ -191,8 +234,10 @@ async function setup() {
       await sleep(200)
     }
   }
+  await seedCredentials()
 
-  await run(["zellij", "attach", "--create-background", session])
+  // Panes opened by the plugin (/zfork) inherit the Zellij server environment.
+  await run(["zellij", "attach", "--create-background", session], { ...baseEnv, ...opencodeEnv })
   clientProc = Bun.spawn(["script", "-qfc", `stty cols 220 rows 50; zellij attach ${session}`, "/dev/null"], {
     env: { ...baseEnv, TERM: "xterm-256color" },
     stdin: "ignore",
@@ -283,6 +328,38 @@ async function scenarios() {
   await expectTab("a lone OpenCode pane names the tab as before", solo.tabId, `Echo ${SEEN}`, { within: 30_000 })
   await renameSession(echo, "-v flag regression")
   await expectTab("a title starting with a dash still renames the tab", solo.tabId, `-v flag regression ${SEEN}`)
+
+  // /zfork forks the session into a new pane in the same tab.
+  const fox = await createSession("Foxtrot")
+  await api("POST", `/api/session/${fox}/synthetic`, { text: "hello from e2e" })
+  const forkTab = await addTab("fork", [opencodeCommand(fox)])
+  const [forkSource] = forkTab.paneIds
+  await expectTab("the session to fork names its tab", forkTab.tabId, `Foxtrot ${SEEN}`, { within: 30_000, hold: 500 })
+  await focus(forkSource)
+  await zellij("action", "write-chars", "--pane-id", `terminal_${forkSource}`, "/zfork")
+  await sleep(500)
+  await zellij("action", "write", "--pane-id", `terminal_${forkSource}`, "13")
+  let added: Pane | undefined
+  for (let i = 0; i < 50 && !added; i++) {
+    added = (await panes()).find((pane) => pane.tab_id === forkTab.tabId && pane.id !== forkSource && !pane.exited)
+    if (!added) await sleep(200)
+  }
+  if (!added) fail("/zfork opens a new pane in the same tab", "no new pane")
+  else {
+    pass("/zfork opens a new pane in the same tab")
+    const forks = ((await api("GET", "/api/session?limit=100")) as any[] | undefined) ?? []
+    const forkSession = forks.find((entry) => entry.parentID === fox || entry.fork?.sessionID === fox)
+    if (!forkSession) fail("/zfork creates a fork of the session", JSON.stringify(forks.map((entry) => entry.title)))
+    else {
+      pass("/zfork creates a fork of the session")
+      await sleep(3_000)
+      const pid = opencodePid(added.id)
+      const cmdline = pid ? readFileSync(`/proc/${pid}/cmdline`, "utf8").split("\0") : []
+      if (cmdline.includes(forkSession.id)) pass("the new pane runs OpenCode on the fork")
+      else fail("the new pane runs OpenCode on the fork", JSON.stringify(cmdline))
+      await expectTab("the tab shows both sessions", forkTab.tabId, `Foxtrot ${SEEN} │ ${forkSession.title} ${SEEN}`, { within: 15_000, hold: 1_000 })
+    }
+  }
 }
 
 try {

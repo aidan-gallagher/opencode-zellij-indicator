@@ -10,6 +10,7 @@ const paneTabs = new Map<number, number>()
 let clientPanes: number[] = []
 let renameFailures = 0
 let paneFocused: boolean | undefined = false
+const openPane = mock(async (_cwd: string | undefined, _command: string[]) => true)
 const renameTab = mock(async (id: number, name: string) => {
   if (renameFailures > 0) {
     renameFailures--
@@ -24,6 +25,7 @@ mock.module("../src/zellij", () => ({
   listClientPanes: async () => clientPanes,
   listPanes: async () => [...paneTabs].map(([id, tabId]) => ({ id, tabId, tabName: tabs.get(tabId) ?? "" })),
   renameTab,
+  openPane,
 }))
 
 const plugin = (await import("opencode-zellij-indicator/tui")).default
@@ -55,6 +57,7 @@ beforeEach(() => {
   renameFailures = 0
   paneFocused = false
   renameTab.mockClear()
+  openPane.mockClear()
 })
 
 afterEach(async () => {
@@ -81,9 +84,21 @@ function client(sessionID: string, title: string) {
   let permission = false
   let listener: Listener | undefined
   let route: { type: string; sessionID?: string } = { type: "session", sessionID }
+  const commands: any[] = []
+  const toasts: any[] = []
+  const forks: any[] = []
   const context = {
     attention: { notify: async () => ({ ok: true, notification: false, sound: true }) },
-    client: { session: { list: async () => ({ data: [], cursor: {} }) } },
+    client: {
+      session: {
+        list: async () => ({ data: [], cursor: {} }),
+        fork: async (input: any) => {
+          forks.push(input)
+          return { id: `${sessionID}-fork`, location: { directory: "/tmp/fork" } }
+        },
+      },
+    },
+    keymap: { layer: (factory: () => { commands: any[] }) => commands.push(...factory().commands) },
     data: {
       listen(handler: Listener) {
         listener = handler
@@ -102,10 +117,13 @@ function client(sessionID: string, title: string) {
         sync: async () => undefined,
       },
     },
-    ui: { router: { current: () => route } },
+    ui: { router: { current: () => route }, toast: { show: (toast: any) => toasts.push(toast) } },
   }
   return {
     context,
+    commands,
+    toasts,
+    forks,
     session,
     emit: (details: any) => listener?.({ details }),
     setPermission(value: boolean) {
@@ -180,6 +198,7 @@ test("preserves a new child's fast completion and follows a moved pane", async (
         },
       },
     },
+    keymap: { layer: () => undefined },
     ui: {
       router: {
         current: () => ({ type: "session", sessionID: selectedSession }),
@@ -441,4 +460,16 @@ test("a failing state write doesn't lose the original name", async () => {
   } finally {
     chmodSync(join(stateDir, "session-test", "tabs"), 0o700)
   }
+})
+
+test("/zfork forks the session into a new pane in the same tab", async () => {
+  tabs.set(1, "Tab #1")
+  const c = client("ses_a", "Alpha")
+  await start(10, 1, c)
+  const command = c.commands.find((entry) => entry.slash?.name === "zfork")
+  expect(command).toBeDefined()
+  await command.run()
+  expect(c.forks).toEqual([{ sessionID: "ses_a" }])
+  expect(openPane).toHaveBeenCalledWith("/tmp/fork", [process.execPath, "--session", "ses_a-fork"])
+  expect(c.toasts).toEqual([])
 })

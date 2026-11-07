@@ -51,6 +51,14 @@ export async function renameTab(id: number, name: string): Promise<boolean> {
   return result.exitCode === 0
 }
 
+// Opens a new pane to the right in the current tab running `command`.
+export async function openPane(cwd: string | undefined, command: string[]): Promise<boolean> {
+  const args = ["action", "new-pane", "--direction", "right", ...(cwd ? ["--cwd", cwd] : []), "--", ...command]
+  const result = await runCommand("zellij", args)
+  if (result.exitCode !== 0) log(`new-pane failed with exit code ${result.exitCode}`)
+  return result.exitCode === 0
+}
+
 // Whether a client is currently focused on our pane.
 export async function isFocused(paneId: number): Promise<boolean | undefined> {
   const panes = await listClientPanes()
