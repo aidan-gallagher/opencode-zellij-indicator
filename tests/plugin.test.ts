@@ -315,6 +315,51 @@ test("preserves a new child's fast completion and follows a moved pane", async (
   expect(tabs.get(1)).toBe("other")
 })
 
+test("a focused tab behind another window still rings and stays unseen", async () => {
+  const { EventEmitter } = await import("node:events")
+  tabs.set(0, "project")
+  const c = client("s1", "Task")
+  const notify = mock(async () => ({ ok: true, notification: false, sound: true }))
+  const renderer = new EventEmitter()
+  Object.assign(c.context, { attention: { notify }, renderer })
+  const finish = (created: number) => {
+    c.emit({ type: "session.execution.started", created, data: { sessionID: "s1" } })
+    c.emit({ type: "session.execution.succeeded", created: created + 1, data: { sessionID: "s1" } })
+  }
+  paneFocused = true
+  const stop = await start(7, 0, c)
+  expect(tabs.get(0)).toBe(`Task ${ICON_SEEN}`)
+
+  // Watching the tab: no sound, straight to seen.
+  finish(100)
+  await settle()
+  expect(tabs.get(0)).toBe(`Task ${ICON_SEEN}`)
+  expect(notify).toHaveBeenCalledTimes(0)
+
+  // The terminal window goes behind another window.
+  renderer.emit("blur")
+  finish(200)
+  await settle()
+  expect(tabs.get(0)).toBe(`Task ${ICON_UNSEEN}`)
+  expect(notify).toHaveBeenCalledTimes(1)
+  expect(notify).toHaveBeenLastCalledWith({
+    title: "Task",
+    message: "OpenCode session done",
+    notification: false,
+    sound: { name: "done", when: "always" },
+  })
+
+  // Bringing the window back marks it seen.
+  renderer.emit("focus")
+  await settle()
+  expect(tabs.get(0)).toBe(`Task ${ICON_SEEN}`)
+  expect(notify).toHaveBeenCalledTimes(1)
+
+  await stop?.()
+  expect(renderer.listenerCount("focus")).toBe(0)
+  expect(renderer.listenerCount("blur")).toBe(0)
+})
+
 test("panes sharing a tab show both sessions without fighting", async () => {
   tabs.set(0, "project")
   paneTabs.set(1, 0)

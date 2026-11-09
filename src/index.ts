@@ -120,6 +120,9 @@ export default Plugin.define({
     const pendingAttention = new Map<string, { phase: "permission" | "done"; title?: string }>()
     let activeRoot: string | undefined
     let activeFamily = new Set<string>()
+    // Set while the terminal window is in the background (Zellij ≥ 0.45
+    // forwards the terminal's focus events to the focused pane).
+    let windowBlurred = false
     let work: Promise<void> = Promise.resolve()
     let refreshRequested = false
     let forceSyncRequested = false
@@ -296,6 +299,13 @@ export default Plugin.define({
           return
       }
     })
+
+    // Whether the user can see our pane: a client is on it and the terminal
+    // window isn't behind another window.
+    const isWatched = async () => {
+      const focused = await isFocused(paneId)
+      return focused && windowBlurred ? false : focused
+    }
 
     const phaseFor = (rootID: string) =>
       derivePhase(
@@ -485,7 +495,7 @@ export default Plugin.define({
       const attentionPhase = previous && previous.phase !== phase && (phase === "permission" || phase === "done") ? phase : undefined
       if (phase === "running") pendingAttention.delete(rootID)
       else if (attentionPhase) pendingAttention.set(rootID, { phase: attentionPhase, title: info.title })
-      const focused = shouldCheckFocus(previous, phase) ? await isFocused(paneId) : undefined
+      const focused = shouldCheckFocus(previous, phase) ? await isWatched() : undefined
       const latestRoute = context.ui.router.current()
       if (latestRoute.type !== "session" || latestRoute.sessionID !== routeSessionID || context.data.session.root(latestRoute.sessionID) !== rootID) return
       let state = transitionSession(previous, phase, focused === true, Date.now())
@@ -495,7 +505,7 @@ export default Plugin.define({
       await render(selection, routeSessionID)
       const attention = pendingAttention.get(rootID)
       if (attention) {
-        const finalFocus = await isFocused(paneId)
+        const finalFocus = await isWatched()
         const finalRoute = context.ui.router.current()
         if (finalRoute.type !== "session" || finalRoute.sessionID !== routeSessionID) return
         if (finalFocus !== undefined) {
@@ -516,6 +526,16 @@ export default Plugin.define({
       }
     }
 
+    const onWindowFocus = () => {
+      windowBlurred = false
+      requestRefresh()
+    }
+    const onWindowBlur = () => {
+      windowBlurred = true
+    }
+    context.renderer?.on("focus", onWindowFocus)
+    context.renderer?.on("blur", onWindowBlur)
+
     await refresh(true).catch((error) => log(`initial update failed: ${error instanceof Error ? error.message : String(error)}`))
     pollTimer = setInterval(() => {
       requestRefresh()
@@ -528,6 +548,8 @@ export default Plugin.define({
       disposed = true
       stopEvents()
       stopWatch()
+      context.renderer?.off("focus", onWindowFocus)
+      context.renderer?.off("blur", onWindowBlur)
       if (pollTimer) clearInterval(pollTimer)
       clearStopwatch()
       await work

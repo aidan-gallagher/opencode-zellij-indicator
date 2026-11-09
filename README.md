@@ -57,10 +57,12 @@ To disable the stopwatch set env variable `OPENCODE_ZELLIJ_STOPWATCH=0`.
 
 When a non-focused Zellij tab finishes (🔔) or needs you (❓), the plugin asks OpenCode to play a notification sound.
 
+A focused tab counts as non-focused while the terminal window is behind another window (e.g. your browser), so you still hear it. Its 🔔 turns ✅ once you bring the terminal back to the front. This needs a terminal that reports window focus (most modern terminals do, e.g. Ghostty, kitty, WezTerm, Alacritty).
+
 ## Install
 
 **1. Install Zellij and OpenCode.**
-Requires OpenCode 2 beta 18414 or newer and Zellij ≥ 0.44.0
+Requires OpenCode 2 beta 18414 or newer and Zellij ≥ 0.45.0
 
 **2. Enable the plugin.**
 
