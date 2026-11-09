@@ -1,5 +1,13 @@
+import { appendFileSync, writeSync } from "node:fs"
 import { Plugin } from "@opencode-ai/plugin/tui"
 import { MAX_TAB_LENGTH, POLL_MS, STOPWATCH_ENABLED, log } from "./config"
+
+// TEMP blur debug: remove before committing.
+const blurDebug = (msg: string) => {
+  try {
+    appendFileSync("/tmp/opencode/zellij-blur.log", `${new Date().toISOString()} pane=${process.env.ZELLIJ_PANE_ID} pid=${process.pid} ${msg}\n`)
+  } catch {}
+}
 import { formatStopwatch, formatTabName, iconFor, sessionOptions, stripIcons, type Label } from "./format"
 import { openRegistry, type TabState } from "./registry"
 import { derivePhase, shouldCheckFocus, transitionSession, type SessionState } from "./state"
@@ -304,7 +312,9 @@ export default Plugin.define({
     // window isn't behind another window.
     const isWatched = async () => {
       const focused = await isFocused(paneId)
-      return focused && windowBlurred ? false : focused
+      const watched = focused && windowBlurred ? false : focused
+      blurDebug(`isWatched: zellijFocused=${focused} windowBlurred=${windowBlurred} -> ${watched}`)
+      return watched
     }
 
     const phaseFor = (rootID: string) =>
@@ -515,26 +525,53 @@ export default Plugin.define({
             sessions.set(rootID, state)
             await render({ rootID, title: info.title, state }, routeSessionID)
           } else if (!finalFocus) {
-            void context.attention.notify({
-              title: attention.title,
-              message: attention.phase === "permission" ? "OpenCode needs input" : "OpenCode session done",
-              notification: false,
-              sound: { name: attention.phase === "permission" ? "permission" : "done", when: "always" },
-            })
+            blurDebug(`attention.notify: phase=${attention.phase}`)
+            void context.attention
+              .notify({
+                title: attention.title,
+                message: attention.phase === "permission" ? "OpenCode needs input" : "OpenCode session done",
+                notification: false,
+                sound: { name: attention.phase === "permission" ? "permission" : "done", when: "always" },
+              })
+              .then((result) => blurDebug(`attention.notify result: ${JSON.stringify(result)}`))
+              .catch((error) => blurDebug(`attention.notify failed: ${error instanceof Error ? error.message : String(error)}`))
           }
         }
       }
     }
 
     const onWindowFocus = () => {
+      blurDebug("renderer event: focus")
       windowBlurred = false
       requestRefresh()
     }
     const onWindowBlur = () => {
+      blurDebug("renderer event: blur")
       windowBlurred = true
     }
     context.renderer?.on("focus", onWindowFocus)
     context.renderer?.on("blur", onWindowBlur)
+    const describeCapabilities = () => {
+      const caps = (context.renderer as unknown as { capabilities?: Record<string, unknown> } | undefined)?.capabilities
+      if (!caps) return "capabilities=<none>"
+      return `focus_tracking=${caps.focus_tracking} multiplexer=${caps.multiplexer} terminal=${JSON.stringify(caps.terminal)} terminalFocusState=${(context.renderer as unknown as { _terminalFocusState?: unknown })._terminalFocusState}`
+    }
+    blurDebug(`setup: renderer=${context.renderer ? "yes" : "no"} ${describeCapabilities()}`)
+    const onCapabilities = () => blurDebug(`renderer event: capabilities ${describeCapabilities()}`)
+    context.renderer?.on("capabilities", onCapabilities)
+    // TEMP blur workaround test: Zellij doesn't answer OpenTUI's DECRQM query
+    // for mode 1004, so OpenTUI never turns focus reporting on. Turn it on here.
+    let forcedFocusReporting = false
+    const caps = (context.renderer as unknown as { capabilities?: { focus_tracking?: boolean } } | undefined)?.capabilities
+    if (process.env.OPENCODE_ZELLIJ_FORCE_FOCUS !== "0" && caps && !caps.focus_tracking) {
+      try {
+        writeSync(1, "\x1b[?1004h")
+        forcedFocusReporting = true
+        blurDebug("forced focus reporting on (\\e[?1004h)")
+      } catch (error) {
+        blurDebug(`could not force focus reporting: ${error instanceof Error ? error.message : String(error)}`)
+      }
+    }
 
     await refresh(true).catch((error) => log(`initial update failed: ${error instanceof Error ? error.message : String(error)}`))
     pollTimer = setInterval(() => {
@@ -550,6 +587,12 @@ export default Plugin.define({
       stopWatch()
       context.renderer?.off("focus", onWindowFocus)
       context.renderer?.off("blur", onWindowBlur)
+      context.renderer?.off("capabilities", onCapabilities)
+      if (forcedFocusReporting) {
+        try {
+          writeSync(1, "\x1b[?1004l")
+        } catch {}
+      }
       if (pollTimer) clearInterval(pollTimer)
       clearStopwatch()
       await work
