@@ -43,6 +43,28 @@ export function formatLabel(label: Label): string {
   return title ? `${title} ${status}` : status
 }
 
+export type SessionEntry = { paneId: number; tabName: string; label: Label | null }
+export type SessionOption = { title: string; value: number; description: string; category: string }
+
+// Picker options for /zsessions: panes that need you first, then running, then
+// idle; ties keep pane order.
+const SESSION_ORDER = [ICON_PERMISSION, ICON_UNSEEN, ICON_RUNNING]
+
+export function sessionOptions(entries: SessionEntry[], ownPaneId: number): SessionOption[] {
+  const rank = (entry: SessionEntry) => {
+    const index = entry.label ? SESSION_ORDER.indexOf(entry.label.icon) : -1
+    return index === -1 ? SESSION_ORDER.length : index
+  }
+  return [...entries]
+    .sort((a, b) => rank(a) - rank(b) || a.paneId - b.paneId)
+    .map((entry) => ({
+      title: entry.label ? formatLabel({ ...entry.label, title: entry.label.title || "Untitled" }) : "No session open",
+      value: entry.paneId,
+      description: entry.paneId === ownPaneId ? `${entry.tabName} · this pane` : entry.tabName,
+      category: rank(entry) <= 1 ? "Needs you" : rank(entry) === 2 ? "Running" : "Idle",
+    }))
+}
+
 // Tab name for the OpenCode panes in one tab, ordered by pane id. One pane
 // shows its label. Several panes are joined when that fits in maxLength,
 // otherwise the primary (last focused) pane's label is followed by the other

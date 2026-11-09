@@ -59,6 +59,13 @@ export async function openPane(cwd: string | undefined, command: string[]): Prom
   return result.exitCode === 0
 }
 
+// Moves the client to a pane, switching tab if needed.
+export async function focusPane(paneId: number): Promise<boolean> {
+  const result = await runCommand("zellij", ["action", "focus-pane-id", `terminal_${paneId}`])
+  if (result.exitCode !== 0) log(`focus-pane-id failed with exit code ${result.exitCode}`)
+  return result.exitCode === 0
+}
+
 // Whether a client is currently focused on our pane.
 export async function isFocused(paneId: number): Promise<boolean | undefined> {
   const panes = await listClientPanes()

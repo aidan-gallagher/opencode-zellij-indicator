@@ -1,6 +1,28 @@
 import { describe, expect, test } from "bun:test"
-import { ICON_RUNNING } from "../src/config"
-import { formatLabel, formatStopwatch, formatTabName, stripIcons } from "../src/format"
+import { ICON_PERMISSION, ICON_RUNNING, ICON_SEEN, ICON_UNSEEN } from "../src/config"
+import { formatLabel, formatStopwatch, formatTabName, sessionOptions, stripIcons } from "../src/format"
+
+describe("sessionOptions", () => {
+  test("puts panes that need you first, then running, then idle", () => {
+    const options = sessionOptions(
+      [
+        { paneId: 1, tabName: "wisa", label: { title: "Notes", icon: ICON_SEEN } },
+        { paneId: 2, tabName: "sonic", label: { title: "Review", icon: ICON_RUNNING, stopwatch: "3m" } },
+        { paneId: 3, tabName: "sonic", label: { title: "Build fix", icon: ICON_UNSEEN } },
+        { paneId: 4, tabName: "k8s", label: null },
+        { paneId: 5, tabName: "zellij", label: { title: "Blur", icon: ICON_PERMISSION } },
+      ],
+      1,
+    )
+    expect(options).toEqual([
+      { title: `Blur ${ICON_PERMISSION}`, value: 5, description: "zellij", category: "Needs you" },
+      { title: `Build fix ${ICON_UNSEEN}`, value: 3, description: "sonic", category: "Needs you" },
+      { title: `Review ${ICON_RUNNING} (⏱ 3m)`, value: 2, description: "sonic", category: "Running" },
+      { title: `Notes ${ICON_SEEN}`, value: 1, description: "wisa · this pane", category: "Idle" },
+      { title: "No session open", value: 4, description: "k8s", category: "Idle" },
+    ])
+  })
+})
 
 describe("stripIcons", () => {
   test("removes a status icon", () => {

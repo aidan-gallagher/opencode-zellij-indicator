@@ -11,6 +11,7 @@ let clientPanes: number[] = []
 let renameFailures = 0
 let paneFocused: boolean | undefined = false
 const openPane = mock(async (_cwd: string | undefined, _command: string[]) => true)
+const focusPane = mock(async (_paneId: number) => true)
 const renameTab = mock(async (id: number, name: string) => {
   if (renameFailures > 0) {
     renameFailures--
@@ -26,6 +27,7 @@ mock.module("../src/zellij", () => ({
   listPanes: async () => [...paneTabs].map(([id, tabId]) => ({ id, tabId, tabName: tabs.get(tabId) ?? "" })),
   renameTab,
   openPane,
+  focusPane,
 }))
 
 const plugin = (await import("opencode-zellij-indicator/tui")).default
@@ -58,6 +60,7 @@ beforeEach(() => {
   paneFocused = false
   renameTab.mockClear()
   openPane.mockClear()
+  focusPane.mockClear()
 })
 
 afterEach(async () => {
@@ -87,6 +90,8 @@ function client(sessionID: string, title: string) {
   const commands: any[] = []
   const toasts: any[] = []
   const forks: any[] = []
+  const selects: any[] = []
+  let pick: unknown
   const context = {
     attention: { notify: async () => ({ ok: true, notification: false, sound: true }) },
     client: {
@@ -117,13 +122,26 @@ function client(sessionID: string, title: string) {
         sync: async () => undefined,
       },
     },
-    ui: { router: { current: () => route }, toast: { show: (toast: any) => toasts.push(toast) } },
+    ui: {
+      router: { current: () => route },
+      toast: { show: (toast: any) => toasts.push(toast) },
+      dialog: {
+        select: async (options: any) => {
+          selects.push(options)
+          return pick
+        },
+      },
+    },
   }
   return {
     context,
     commands,
     toasts,
     forks,
+    selects,
+    pickNext(value: unknown) {
+      pick = value
+    },
     session,
     emit: (details: any) => listener?.({ details }),
     setPermission(value: boolean) {
@@ -472,4 +490,36 @@ test("/zfork forks the session into a new pane in the same tab", async () => {
   expect(c.forks).toEqual([{ sessionID: "ses_a" }])
   expect(openPane).toHaveBeenCalledWith("/tmp/fork", [process.execPath, "--session", "ses_a-fork"])
   expect(c.toasts).toEqual([])
+})
+
+test("/zsessions lists OpenCode panes in other tabs and jumps to the one picked", async () => {
+  tabs.set(1, "wisa")
+  tabs.set(2, "sonic")
+  paneTabs.set(30, 2) // a plain shell, not OpenCode
+  const a = client("ses_a", "Alpha")
+  const b = client("ses_b", "Beta")
+  await start(10, 1, a)
+  await start(20, 2, b)
+  b.setPermission(true)
+  await waitFor(() => tabs.get(2) === `Beta ${ICON_PERMISSION}`)
+
+  const command = a.commands.find((entry) => entry.slash?.name === "zsessions")
+  a.pickNext(20)
+  await command.run()
+
+  expect(a.selects).toHaveLength(1)
+  expect(a.selects[0].options).toEqual([
+    { title: `Beta ${ICON_PERMISSION}`, value: 20, description: "sonic", category: "Needs you" },
+    { title: `Alpha ${ICON_SEEN}`, value: 10, description: "wisa · this pane", category: "Idle" },
+  ])
+  expect(focusPane).toHaveBeenCalledWith(20)
+})
+
+test("/zsessions says so when this is the only OpenCode pane", async () => {
+  tabs.set(1, "wisa")
+  const a = client("ses_a", "Alpha")
+  await start(10, 1, a)
+  await a.commands.find((entry) => entry.slash?.name === "zsessions").run()
+  expect(a.selects).toEqual([])
+  expect(a.toasts).toEqual([{ message: "No other OpenCode panes in this Zellij session", variant: "info" }])
 })

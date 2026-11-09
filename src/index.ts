@@ -1,9 +1,9 @@
 import { Plugin } from "@opencode-ai/plugin/tui"
 import { MAX_TAB_LENGTH, POLL_MS, STOPWATCH_ENABLED, log } from "./config"
-import { formatStopwatch, formatTabName, iconFor, stripIcons, type Label } from "./format"
+import { formatStopwatch, formatTabName, iconFor, sessionOptions, stripIcons, type Label } from "./format"
 import { openRegistry, type TabState } from "./registry"
 import { derivePhase, shouldCheckFocus, transitionSession, type SessionState } from "./state"
-import { isFocused, listClientPanes, listPanes, openPane, renameTab, type ZellijPane } from "./zellij"
+import { focusPane, isFocused, listClientPanes, listPanes, openPane, renameTab, type ZellijPane } from "./zellij"
 
 type Selection = {
   rootID: string
@@ -63,10 +63,43 @@ export default Plugin.define({
           enabled: () => context.ui.router.current().type === "session",
           run: forkToPane,
         },
+        {
+          id: "zellij.sessions",
+          title: "Jump to an OpenCode pane in this Zellij session",
+          group: "Session",
+          palette: true,
+          slash: { name: "zsessions" },
+          run: () => showSessions(),
+        },
       ],
-      bindings: ["zellij.fork"],
+      bindings: ["zellij.fork", "zellij.sessions"],
     }))
     const registry = await openRegistry(process.env.ZELLIJ_SESSION_NAME, paneId)
+
+    // Lists every live OpenCode pane in this Zellij session from the shared
+    // registry and moves the client to the one picked.
+    const showSessions = async () => {
+      const panes = (await listPanes()) ?? []
+      const members = await registry.members(panes.map((pane) => pane.id))
+      // Tab names show session titles, so name each tab by its original name.
+      const tabNames = new Map<number, string>()
+      for (const pane of panes) {
+        if (!tabNames.has(pane.tabId)) tabNames.set(pane.tabId, (await registry.readTab(pane.tabId))?.base ?? stripIcons(pane.tabName))
+      }
+      const paneTabIds = new Map(panes.map((pane) => [pane.id, pane.tabId]))
+      const entries = members.map((member) => ({ ...member, tabName: tabNames.get(paneTabIds.get(member.paneId)!) ?? "" }))
+      if (entries.every((entry) => entry.paneId === paneId)) {
+        context.ui.toast.show({ message: "No other OpenCode panes in this Zellij session", variant: "info" })
+        return
+      }
+      const picked = await context.ui.dialog.select({
+        title: "Zellij sessions",
+        placeholder: "Search",
+        options: sessionOptions(entries, paneId),
+      })
+      if (picked === undefined || picked === paneId) return
+      if (!(await focusPane(picked))) context.ui.toast.show({ message: `Could not focus pane ${picked}`, variant: "error" })
+    }
     let tabId = initialPane.tabId
     let ownLabel: Label | null = null
     const pendingLeaves = new Set<number>()

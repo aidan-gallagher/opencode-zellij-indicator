@@ -33,9 +33,17 @@ OpenCode gives each session an auto-generated title, and the plugin uses that as
 
 If a Zellij tab has several OpenCode panes, the tab shows all of them when they fit, e.g. `Fix login ⏳ │ Write tests ✅`. When that would be longer than 60 characters (change with `OPENCODE_ZELLIJ_MAX_TAB_LENGTH`), it shows the OpenCode pane you focused last plus the other panes' icons, e.g. `Fix login ⏳ +✅🔔`. Focusing a shell or editor in the same tab keeps the last OpenCode session.
 
-## Fork into a new pane
+## Commands
 
-Run `/zfork` (or **Fork session into a new Zellij pane** from `Ctrl+P`) to fork the current session and open the fork in a new pane to the right, in the same tab. The original pane stays on the original session. To bind a key, set `"zellij.fork"` under `keybinds` in `~/.config/opencode/cli.json`.
+Run these as slash commands, or find them in the command palette (`Ctrl+P`).
+
+### `/zfork`
+
+Forks the current session and opens the fork in a new pane to the right, in the same tab. The original pane stays on the original session.
+
+### `/zsessions`
+
+Lists every OpenCode pane in the current Zellij session with its status and tab: panes that need you first, then running ones, then idle ones. Pick one to move to it, switching tab if needed.
 
 ## Stopwatch
 
